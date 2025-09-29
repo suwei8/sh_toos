@@ -15,16 +15,18 @@ bash <(curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/ma
 ## 2、update-ssh-whitelist.sh
 ### 只允许 Cloudflare DDNS 子域名 动态白名单访问ssh
 ### 一键执行命令：
-
+ Ubuntu 20/22/24版本：
 ```bash
 sudo bash -c 'curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/update-ssh-whitelist.sh -o /usr/local/bin/update-ssh-whitelist.sh && chmod +x /usr/local/bin/update-ssh-whitelist.sh && /usr/local/bin/update-ssh-whitelist.sh && (crontab -l 2>/dev/null; echo "*/5 * * * * /usr/local/bin/update-ssh-whitelist.sh >> /var/log/update-ssh-whitelist.log 2>&1") | crontab -'
 ```
 
 ---
 
+CentOS 7 版本：
 
-
-
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/update-ssh-whitelist-CentOS7.sh)
+```
 
 
 
