@@ -57,3 +57,33 @@ elif command -v service >/dev/null 2>&1 && [ -f /etc/init.d/iptables ]; then
 else
   echo "⚠️ 未检测到规则保存工具，规则只在当前会话生效（重启后会丢失）"
 fi
+
+# =============================
+# 🔹 附加功能：日志检查 + 状态查看
+# =============================
+
+echo ""
+echo "📜 最近的 SSH 登录失败记录："
+if [ -f /var/log/auth.log ]; then
+  tail -n 200 /var/log/auth.log | egrep "Failed password|Invalid user|authentication failure|Connection closed by authenticating user"
+elif [ -f /var/log/secure ]; then   # CentOS 使用 /var/log/secure
+  tail -n 200 /var/log/secure | egrep "Failed password|Invalid user|authentication failure|Connection closed by authenticating user"
+fi
+
+echo ""
+echo "🛡 当前 IPv4 SSH_RULES："
+iptables -L SSH_RULES -n
+
+echo ""
+echo "🛡 当前 IPv6 SSH_RULES："
+ip6tables -L SSH_RULES -n
+
+echo ""
+echo "🧹 清理认证日志..."
+if [ -f /var/log/auth.log ]; then
+  truncate -s 0 /var/log/auth.log
+  echo "✅ 已清空 /var/log/auth.log"
+elif [ -f /var/log/secure ]; then
+  truncate -s 0 /var/log/secure
+  echo "✅ 已清空 /var/log/secure"
+fi
