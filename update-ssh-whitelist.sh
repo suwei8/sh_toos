@@ -4,7 +4,12 @@ set -euo pipefail
 # -----------------------
 # 配置（按需修改）
 # -----------------------
-PORT=22
+# 支持多个监听端口（例如 22, 2053）
+PORTS=(
+  22
+  2053
+)
+
 DOMAINS=(
   ssh-mobile-v4.555606.xyz
   wky.555606.xyz
@@ -47,9 +52,11 @@ add_rule() {
 # -----------------------
 # 清理并（重新）创建自定义链（幂等）
 # -----------------------
-# 解绑 INPUT 指向旧链（若存在）
-iptables -D INPUT -p tcp --dport "$PORT" -j "$CHAIN" 2>/dev/null || true
-ip6tables -D INPUT -p tcp --dport "$PORT" -j "$CHAIN" 2>/dev/null || true
+# 解绑 INPUT 指向旧链（若存在） —— 对所有端口
+for p in "${PORTS[@]}"; do
+  iptables -D INPUT -p tcp --dport "$p" -j "$CHAIN" 2>/dev/null || true
+  ip6tables -D INPUT -p tcp --dport "$p" -j "$CHAIN" 2>/dev/null || true
+done
 
 # 清理旧链（如果存在则 flush & delete），然后新建
 if iptables -L "$CHAIN" &>/dev/null; then
@@ -65,22 +72,26 @@ iptables -N "$CHAIN" 2>/dev/null || true
 ip6tables -N "$CHAIN" 2>/dev/null || true
 
 # -----------------------
-# 在 SSH_RULES 链中添加域名白名单（IPv4/IPv6）
+# 在 SSH_RULES 链中添加域名白名单（IPv4/IPv6），针对每个端口都添加对应的 ACCEPT 规则
 # -----------------------
 if command -v dig >/dev/null 2>&1; then
   for d in "${DOMAINS[@]}"; do
     # IPv4
     for ip in $(dig +short A "$d" 2>/dev/null); do
       if [[ -n "$ip" ]]; then
-        add_rule iptables -A "$CHAIN" -p tcp -s "$ip" --dport "$PORT" -j ACCEPT
-        echo "允许 IPv4 $ip ($d)"
+        for p in "${PORTS[@]}"; do
+          add_rule iptables -A "$CHAIN" -p tcp -s "$ip" --dport "$p" -j ACCEPT
+        done
+        echo "允许 IPv4 $ip ($d) 对端口 ${PORTS[*]}"
       fi
     done
     # IPv6
     for ip in $(dig +short AAAA "$d" 2>/dev/null); do
       if [[ -n "$ip" ]]; then
-        add_rule ip6tables -A "$CHAIN" -p tcp -s "$ip" --dport "$PORT" -j ACCEPT
-        echo "允许 IPv6 $ip ($d)"
+        for p in "${PORTS[@]}"; do
+          add_rule ip6tables -A "$CHAIN" -p tcp -s "$ip" --dport "$p" -j ACCEPT
+        done
+        echo "允许 IPv6 $ip ($d) 对端口 ${PORTS[*]}"
       fi
     done
   done
@@ -88,52 +99,63 @@ else
   echo "跳过域名解析：dig 未安装"
 fi
 
-# 默认在链尾 DROP（阻止未在白名单的直连公网 SSH）
+# 默认在链尾 DROP（阻止未在白名单的直连公网 SSH） —— 每个协议只需一个 DROP 即可（链内无端口区分）
 add_rule iptables -A "$CHAIN" -j DROP
 add_rule ip6tables -A "$CHAIN" -j DROP
 
 # -----------------------
-# 在 INPUT 链上按固定顺序插入规则
+# 在 INPUT 链上按固定顺序插入规则（对每个端口）
 # 1) lo (IPv4 + IPv6)
 # 2) 内网 IPv4 网段（可多个）
 # 3) 挂接 SSH_RULES 链（用于公网白名单 + DROP）
 # -----------------------
 
 # 先删除可能存在的旧相同规则，保证幂等（不会重复累积）
-del_rule_if_exists iptables INPUT -i lo -p tcp --dport "$PORT" -j ACCEPT
-del_rule_if_exists ip6tables INPUT -i lo -p tcp --dport "$PORT" -j ACCEPT
+for p in "${PORTS[@]}"; do
+  del_rule_if_exists iptables INPUT -i lo -p tcp --dport "$p" -j ACCEPT
+  del_rule_if_exists ip6tables INPUT -i lo -p tcp --dport "$p" -j ACCEPT
+done
 
 for net in "${LAN_NETS[@]}"; do
-  del_rule_if_exists iptables INPUT -s "$net" -p tcp --dport "$PORT" -j ACCEPT
+  for p in "${PORTS[@]}"; do
+    del_rule_if_exists iptables INPUT -s "$net" -p tcp --dport "$p" -j ACCEPT
+  done
 done
 
 # 删除旧的跳转（避免多次挂载）
-del_rule_if_exists iptables INPUT -p tcp --dport "$PORT" -j "$CHAIN"
-del_rule_if_exists ip6tables INPUT -p tcp --dport "$PORT" -j "$CHAIN"
+for p in "${PORTS[@]}"; do
+  del_rule_if_exists iptables INPUT -p tcp --dport "$p" -j "$CHAIN"
+  del_rule_if_exists ip6tables INPUT -p tcp --dport "$p" -j "$CHAIN"
+done
 
-# 插入：1) loopback（保证为第一条规则）
-add_rule iptables -I INPUT 1 -i lo -p tcp --dport "$PORT" -j ACCEPT
-add_rule ip6tables -I INPUT 1 -i lo -p tcp --dport "$PORT" -j ACCEPT
-echo "已允许本地 loopback (127.0.0.1 / ::1) 访问端口 $PORT（位置 1）"
+# 插入：1) loopback（保证为第一条规则），对每个端口都插入
+for p in "${PORTS[@]}"; do
+  add_rule iptables -I INPUT 1 -i lo -p tcp --dport "$p" -j ACCEPT
+  add_rule ip6tables -I INPUT 1 -i lo -p tcp --dport "$p" -j ACCEPT
+  echo "已允许本地 loopback (127.0.0.1 / ::1) 访问端口 $p（位置 1）"
+done
 
 # 插入：2) 内网网段（逐条插入到位置 2、3... 保证优先级高于 SSH_RULES）
 pos=2
 for net in "${LAN_NETS[@]}"; do
   # 简单判断是否为 IPv4 CIDR（以数字开头）
   if [[ "$net" =~ ^[0-9] ]]; then
-    add_rule iptables -I INPUT $pos -s "$net" -p tcp --dport "$PORT" -j ACCEPT
-    echo "已允许内网网段 $net 访问端口 $PORT（位置 $pos）"
-    pos=$((pos + 1))
+    for p in "${PORTS[@]}"; do
+      add_rule iptables -I INPUT $pos -s "$net" -p tcp --dport "$p" -j ACCEPT
+      echo "已允许内网网段 $net 访问端口 $p（位置 $pos）"
+      pos=$((pos + 1))
+    done
   else
     echo "跳过 LAN 网段（格式疑似不为 IPv4）: $net"
   fi
 done
 
-# 插入：3) 把 SSH_RULES 链挂到 INPUT（放在后面）
-# 使用 -A 避免把它插到最前面，确保 lo 与 LAN 规则在前
-add_rule iptables -A INPUT -p tcp --dport "$PORT" -j "$CHAIN"
-add_rule ip6tables -A INPUT -p tcp --dport "$PORT" -j "$CHAIN"
-echo "已挂接 $CHAIN 到 INPUT（公网连接经过 $CHAIN 判断）"
+# 插入：3) 把 SSH_RULES 链挂到 INPUT（放在后面），对每个端口都挂载一次
+for p in "${PORTS[@]}"; do
+  add_rule iptables -A INPUT -p tcp --dport "$p" -j "$CHAIN"
+  add_rule ip6tables -A INPUT -p tcp --dport "$p" -j "$CHAIN"
+done
+echo "已挂接 $CHAIN 到 INPUT（公网连接经过 $CHAIN 判断） 对端口: ${PORTS[*]}"
 
 # -----------------------
 # 保存规则（若支持）
@@ -163,7 +185,7 @@ fi
 
 echo
 echo "🛡 当前 INPUT 前几条规则（IPv4）："
-iptables -L INPUT -n --line-numbers | sed -n '1,12p' || true
+iptables -L INPUT -n --line-numbers | sed -n '1,30p' || true
 
 echo
 echo "🛡 当前 $CHAIN 规则（IPv4）："
@@ -174,4 +196,4 @@ echo "🛡 当前 $CHAIN 规则（IPv6）："
 ip6tables -L "$CHAIN" -n --line-numbers || true
 
 echo
-echo "完成。请确认 cloudflared 服务正在运行并绑定到本地 (127.0.0.1) 或相应端口。"
+echo "完成。已对端口 ${PORTS[*]} 应用规则。请确认 cloudflared 服务正在运行并绑定到本地 (127.0.0.1) 或相应端口。"
