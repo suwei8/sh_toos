@@ -1,6 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
+# ===========================================================
+# 高安全 SSH 防护脚本（支持多端口 + 域名 + 固定 IP 段白名单）
+# 版本：v2.1
+# ===========================================================
+
 # -----------------------
 # 配置（按需修改）
 # -----------------------
@@ -10,6 +15,7 @@ PORTS=(
   2053
 )
 
+# 域名白名单（自动解析 IPv4/IPv6）
 DOMAINS=(
   ssh-mobile-v4.555606.xyz
   wky.555606.xyz
@@ -17,10 +23,16 @@ DOMAINS=(
   ssh-vps-v6.555606.xyz
 )
 
-# 支持多个局域网网段（IPv4）
+# 内网 IPv4 网段
 LAN_NETS=(
   "10.0.0.0/16"
-  # 如果需要可追加更多网段，例如 "192.168.1.0/24"
+  # 可追加更多网段，例如 "192.168.1.0/24"
+)
+
+# 固定 IP 段白名单（例如 39.x.x.x）
+IP_WHITELIST=(
+  "39.0.0.0/8"
+  # 可追加更多，如 "123.58.0.0/16"
 )
 
 # 链名
@@ -39,26 +51,23 @@ command -v dig >/dev/null 2>&1 || echo "warning: dig 未检测到，域名解析
 del_rule_if_exists() {
   local table="$1"     # iptables 或 ip6tables
   shift
-  # 尝试删除，忽略错误
   $table -D "$@" 2>/dev/null || true
 }
 
-# helper: 添加规则（直接添加，不检查重复——我们在添加前会删除相同规则）
+# helper: 添加规则
 add_rule() {
   local table="$1"; shift
   $table "$@"
 }
 
 # -----------------------
-# 清理并（重新）创建自定义链（幂等）
+# 清理旧链并重建
 # -----------------------
-# 解绑 INPUT 指向旧链（若存在） —— 对所有端口
 for p in "${PORTS[@]}"; do
   iptables -D INPUT -p tcp --dport "$p" -j "$CHAIN" 2>/dev/null || true
   ip6tables -D INPUT -p tcp --dport "$p" -j "$CHAIN" 2>/dev/null || true
 done
 
-# 清理旧链（如果存在则 flush & delete），然后新建
 if iptables -L "$CHAIN" &>/dev/null; then
   iptables -F "$CHAIN" 2>/dev/null || true
   iptables -X "$CHAIN" 2>/dev/null || true
@@ -72,7 +81,7 @@ iptables -N "$CHAIN" 2>/dev/null || true
 ip6tables -N "$CHAIN" 2>/dev/null || true
 
 # -----------------------
-# 在 SSH_RULES 链中添加域名白名单（IPv4/IPv6），针对每个端口都添加对应的 ACCEPT 规则
+# 域名白名单（IPv4 + IPv6）
 # -----------------------
 if command -v dig >/dev/null 2>&1; then
   for d in "${DOMAINS[@]}"; do
@@ -99,18 +108,29 @@ else
   echo "跳过域名解析：dig 未安装"
 fi
 
-# 默认在链尾 DROP（阻止未在白名单的直连公网 SSH） —— 每个协议只需一个 DROP 即可（链内无端口区分）
+# -----------------------
+# 固定 IP 段白名单（例如 39.0.0.0/8）
+# -----------------------
+for net in "${IP_WHITELIST[@]}"; do
+  if [[ "$net" =~ ^[0-9] ]]; then
+    for p in "${PORTS[@]}"; do
+      add_rule iptables -A "$CHAIN" -p tcp -s "$net" --dport "$p" -j ACCEPT
+      echo "允许固定 IPv4 段 $net 访问端口 $p"
+    done
+  else
+    echo "跳过无效 IP 白名单条目: $net"
+  fi
+done
+
+# -----------------------
+# 默认 DROP（非白名单全部丢弃）
+# -----------------------
 add_rule iptables -A "$CHAIN" -j DROP
 add_rule ip6tables -A "$CHAIN" -j DROP
 
 # -----------------------
-# 在 INPUT 链上按固定顺序插入规则（对每个端口）
-# 1) lo (IPv4 + IPv6)
-# 2) 内网 IPv4 网段（可多个）
-# 3) 挂接 SSH_RULES 链（用于公网白名单 + DROP）
+# INPUT 链处理
 # -----------------------
-
-# 先删除可能存在的旧相同规则，保证幂等（不会重复累积）
 for p in "${PORTS[@]}"; do
   del_rule_if_exists iptables INPUT -i lo -p tcp --dport "$p" -j ACCEPT
   del_rule_if_exists ip6tables INPUT -i lo -p tcp --dport "$p" -j ACCEPT
@@ -122,23 +142,21 @@ for net in "${LAN_NETS[@]}"; do
   done
 done
 
-# 删除旧的跳转（避免多次挂载）
 for p in "${PORTS[@]}"; do
   del_rule_if_exists iptables INPUT -p tcp --dport "$p" -j "$CHAIN"
   del_rule_if_exists ip6tables INPUT -p tcp --dport "$p" -j "$CHAIN"
 done
 
-# 插入：1) loopback（保证为第一条规则），对每个端口都插入
+# loopback 优先
 for p in "${PORTS[@]}"; do
   add_rule iptables -I INPUT 1 -i lo -p tcp --dport "$p" -j ACCEPT
   add_rule ip6tables -I INPUT 1 -i lo -p tcp --dport "$p" -j ACCEPT
-  echo "已允许本地 loopback (127.0.0.1 / ::1) 访问端口 $p（位置 1）"
+  echo "已允许本地 loopback (127.0.0.1 / ::1) 访问端口 $p"
 done
 
-# 插入：2) 内网网段（逐条插入到位置 2、3... 保证优先级高于 SSH_RULES）
+# 内网段优先
 pos=2
 for net in "${LAN_NETS[@]}"; do
-  # 简单判断是否为 IPv4 CIDR（以数字开头）
   if [[ "$net" =~ ^[0-9] ]]; then
     for p in "${PORTS[@]}"; do
       add_rule iptables -I INPUT $pos -s "$net" -p tcp --dport "$p" -j ACCEPT
@@ -150,7 +168,7 @@ for net in "${LAN_NETS[@]}"; do
   fi
 done
 
-# 插入：3) 把 SSH_RULES 链挂到 INPUT（放在后面），对每个端口都挂载一次
+# 挂接 SSH_RULES
 for p in "${PORTS[@]}"; do
   add_rule iptables -A INPUT -p tcp --dport "$p" -j "$CHAIN"
   add_rule ip6tables -A INPUT -p tcp --dport "$p" -j "$CHAIN"
@@ -158,7 +176,7 @@ done
 echo "已挂接 $CHAIN 到 INPUT（公网连接经过 $CHAIN 判断） 对端口: ${PORTS[*]}"
 
 # -----------------------
-# 保存规则（若支持）
+# 持久化保存
 # -----------------------
 if command -v netfilter-persistent >/dev/null 2>&1; then
   netfilter-persistent save || echo "保存到 netfilter-persistent 失败（但规则已生效）"
@@ -171,10 +189,10 @@ else
 fi
 
 # -----------------------
-# 状态输出（便于调试）
+# 状态输出
 # -----------------------
 echo
-echo "📜 最近的 SSH 登录失败记录（如果有）："
+echo "📜 最近的 SSH 登录失败记录："
 if [ -f /var/log/auth.log ]; then
   tail -n 200 /var/log/auth.log | egrep "Failed password|Invalid user|authentication failure|Connection closed by authenticating user" || true
 elif [ -f /var/log/secure ]; then
@@ -184,16 +202,16 @@ else
 fi
 
 echo
-echo "🛡 当前 INPUT 前几条规则（IPv4）："
+echo "🛡 当前 INPUT 规则（IPv4 前30行）："
 iptables -L INPUT -n --line-numbers | sed -n '1,30p' || true
 
 echo
-echo "🛡 当前 $CHAIN 规则（IPv4）："
+echo "🛡 当前 $CHAIN 链规则（IPv4）："
 iptables -L "$CHAIN" -n --line-numbers || true
 
 echo
-echo "🛡 当前 $CHAIN 规则（IPv6）："
+echo "🛡 当前 $CHAIN 链规则（IPv6）："
 ip6tables -L "$CHAIN" -n --line-numbers || true
 
 echo
-echo "完成。已对端口 ${PORTS[*]} 应用规则。请确认 cloudflared 服务正在运行并绑定到本地 (127.0.0.1) 或相应端口。"
+echo "✅ 完成。已对端口 ${PORTS[*]} 应用规则。请确认 cloudflared 服务绑定在本地端口。"
