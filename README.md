@@ -22,7 +22,7 @@ sudo bash -c 'tmp=$(mktemp) && crontab -l 2>/dev/null | grep -Fv "curl -fsSL htt
 
 
 ```
-
+crontab -e
 ---
 
 
