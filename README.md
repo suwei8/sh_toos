@@ -17,16 +17,12 @@ bash <(curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/ma
 ### 一键执行命令：
  Ubuntu 20/22/24版本：
 ```bash
-sudo bash -c 'curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/update-ssh-whitelist.sh -o /usr/local/bin/update-ssh-whitelist.sh && chmod +x /usr/local/bin/update-ssh-whitelist.sh && /usr/local/bin/update-ssh-whitelist.sh && (crontab -l 2>/dev/null; echo "*/5 * * * * /usr/local/bin/update-ssh-whitelist.sh >> /var/log/update-ssh-whitelist.log 2>&1") | crontab -'
+sudo bash -c 'tmp=$(mktemp) && crontab -l 2>/dev/null | grep -Fv "curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/update-ssh-whitelist.sh | bash" >"$tmp" || true; echo "*/5 * * * * /bin/bash -c '\''curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/update-ssh-whitelist.sh | bash'\''" >>"$tmp"; crontab "$tmp"; rm -f "$tmp"; /bin/bash -c '\''curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/update-ssh-whitelist.sh | bash'\'''
+
 ```
 
 ---
 
-CentOS 7 版本：
-
-```bash
-sudo bash -c 'curl -4 -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/main/update-ssh-whitelist-CentOS7.sh -o /usr/local/bin/update-ssh-whitelist.sh && chmod +x /usr/local/bin/update-ssh-whitelist.sh && /usr/local/bin/update-ssh-whitelist.sh && (crontab -l 2>/dev/null; echo "*/5 * * * * /usr/local/bin/update-ssh-whitelist.sh >> /var/log/update-ssh-whitelist.log 2>&1") | crontab -'
-```
 
 
 
