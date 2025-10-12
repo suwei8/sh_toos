@@ -1,8 +1,5 @@
-
-
-
 # Download and install nvm:
-curl -o- https://gh-proxy.555606.xyz/https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/Node/install.sh | bash
+'curl -o- https://gh-proxy.555606.xyz/https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/Node/install.sh | bash'
 
 # in lieu of restarting the shell
 \. "$HOME/.nvm/nvm.sh"
