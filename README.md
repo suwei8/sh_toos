@@ -14,24 +14,26 @@ bash <(curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/ma
 
 ## 2、update-ssh-whitelist.sh
 ### 只允许 Cloudflare DDNS 子域名 动态白名单访问ssh
-### 一键执行命令：
- Ubuntu 20/22/24版本：
+### Ubuntu一键执行命令：
 ```bash
 
 sudo bash -c 'tmp=$(mktemp) && crontab -l 2>/dev/null | grep -Fv "curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/update-ssh-whitelist.sh | bash" >"$tmp" || true; echo "*/5 * * * * /bin/bash -c '\''curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/update-ssh-whitelist.sh | bash'\''" >>"$tmp"; crontab "$tmp"; rm -f "$tmp"; /bin/bash -c '\''curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/update-ssh-whitelist.sh | bash'\'''
 
+```
+
+### CentOS7一键执行命令：
+
+```bash
+
+sudo bash -c 'tmp=$(mktemp) && crontab -l 2>/dev/null | grep -Fv "curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/update-ssh-whitelist-CentOS7.sh | bash" >"$tmp" || true; echo "*/5 * * * * /bin/bash -c '\''curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/update-ssh-whitelist-CentOS7.sh | bash'\''" >>"$tmp"; crontab "$tmp"; rm -f "$tmp"; /bin/bash -c '\''curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/update-ssh-whitelist-CentOS7.sh | bash'\'''
 
 ```
+
+### 查看定时任务
+
+```bash
+
 crontab -e
----
 
+```
 
-
-
-
-### 🔹 解释
-
-* `curl -fsSL` → 下载脚本（失败时静默，避免干扰）。
-* `<(...)` → 直接把脚本内容传给 `bash` 执行，不会在本地留下文件。
-
----
