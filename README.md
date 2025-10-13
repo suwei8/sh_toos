@@ -37,3 +37,8 @@ crontab -e
 
 ```
 
+### 本机外网ip
+```bash
+curl ifconfig.me
+```
+
