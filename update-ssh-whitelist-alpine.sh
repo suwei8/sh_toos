@@ -1,5 +1,7 @@
 #!/bin/sh
+export PATH=/sbin:/usr/sbin:/usr/bin:/bin
 set -eu
+
 
 # ===========================================================
 # 高安全 SSH 防护脚本（适配 Alpine 3.20）
