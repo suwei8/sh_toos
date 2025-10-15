@@ -3,12 +3,9 @@ set -eu
 
 # ===========================================================
 # 高安全 SSH 防护脚本（适配 Alpine 3.20）
-# 版本：v2.1-alpine
+# 版本：v2.2-alpine（自动安装依赖）
 # ===========================================================
 
-# -----------------------
-# 配置（按需修改）
-# -----------------------
 PORTS="22 2053"
 
 DOMAINS="
@@ -29,22 +26,38 @@ IP_WHITELIST="
 CHAIN="SSH_RULES"
 
 # -----------------------
-# 环境检查
+# 环境检查 & 自动安装依赖
 # -----------------------
 echo "🔍 检查依赖..."
+
+# 检查包管理器
+if ! command -v apk >/dev/null 2>&1; then
+  echo "❌ 未检测到 apk 包管理器，本脚本仅支持 Alpine Linux"
+  exit 1
+fi
+
+# 检查并安装 iptables/ip6tables
+need_install=""
 for cmd in iptables ip6tables; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "❌ 缺少 $cmd，请执行：apk add iptables ip6tables"
-    exit 1
+    need_install="1"
   fi
 done
 
+if [ -n "$need_install" ]; then
+  echo "⚙️ 正在安装 iptables 组件..."
+  apk add --no-cache iptables ip6tables >/dev/null
+  echo "✅ iptables 已安装完成。"
+fi
+
+# 检查 dig（用于域名白名单）
 if ! command -v dig >/dev/null 2>&1; then
-  echo "⚠️ 未检测到 dig，将跳过域名白名单解析（可安装 bind-tools）"
+  echo "⚙️ 正在安装 bind-tools（提供 dig）..."
+  apk add --no-cache bind-tools >/dev/null || echo "⚠️ 无法安装 bind-tools，域名解析将被跳过"
 fi
 
 # -----------------------
-# 删除旧链
+# 清理旧链
 # -----------------------
 for p in $PORTS; do
   iptables -D INPUT -p tcp --dport "$p" -j "$CHAIN" 2>/dev/null || true
@@ -82,7 +95,7 @@ if command -v dig >/dev/null 2>&1; then
     done
   done
 else
-  echo "跳过域名白名单：未安装 dig"
+  echo "⚠️ 跳过域名白名单：dig 未安装"
 fi
 
 # -----------------------
