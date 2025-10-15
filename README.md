@@ -29,6 +29,22 @@ sudo bash -c 'tmp=$(mktemp) && crontab -l 2>/dev/null | grep -Fv "curl -fsSL htt
 
 ```
 
+### alpine3.20一键执行命令：
+
+```bash
+
+sh -c 'apk add --no-cache wget busybox-extras openrc >/dev/null; tmp=$(mktemp); crontab -l 2>/
+dev/null | grep -Fv "wget --no-cache -qO- https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/
+update-ssh-whitelist-alpine.sh | sh" >"$tmp" || true; echo "*/5 * * * * /bin/sh -c '\''wget --no-cache -qO-
+ https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/update-ssh-whitelist-alpine.sh | sh'\''"
+>>"$tmp"; crontab "$tmp"; rm -f "$tmp"; rc-update add crond default; service crond start; /bin/sh -c '\''wg
+et --no-cache -qO- https://raw.githubusercontent.com/suwei8/sh_toos/refs/heads/main/update-ssh-whitelist-al
+pine.sh | sh'\'''
+
+
+```
+
+
 ### 查看定时任务
 
 ```bash
