@@ -1,25 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-# 确保 nftables 已安装
-if ! command -v nft >/dev/null 2>&1; then
-  echo "nftables 未安装，正在安装..."
-  apt update && apt install nftables -y
-fi
-
-# 确保 filter 表和链 SSH_RULES 存在
-if ! nft list tables | grep -q "filter"; then
-  nft add table ip filter
-  nft add table ip6 filter
-fi
-
-if ! nft list chains ip filter | grep -q "SSH_RULES"; then
-  nft add chain ip filter SSH_RULES { type filter hook input priority 0 \; }
-  nft add chain ip6 filter SSH_RULES { type filter hook input priority 0 \; }
-  echo "已创建链 SSH_RULES"
-fi
-
-
 # ===========================================================
 # 高安全 SSH 防护脚本（支持多端口 + 域名 + 固定 IP 段白名单）
 # 版本：v2.1
@@ -28,13 +9,11 @@ fi
 # -----------------------
 # 配置（按需修改）
 # -----------------------
-# 支持多个监听端口（例如 22, 2053）
 PORTS=(
   22
   2053
 )
 
-# 域名白名单（自动解析 IPv4/IPv6）
 DOMAINS=(
   ssh-mobile-v4.555606.xyz
   wky.555606.xyz
@@ -42,19 +21,14 @@ DOMAINS=(
   ssh-vps-v6.555606.xyz
 )
 
-# 内网 IPv4 网段
 LAN_NETS=(
   "10.0.0.0/16"
-  # 可追加更多网段，例如 "192.168.1.0/24"
 )
 
-# 固定 IP 段白名单（例如 39.x.x.x）
 IP_WHITELIST=(
   "39.0.0.0/8"
-  # 可追加更多，如 "123.58.0.0/16"
 )
 
-# 链名
 CHAIN="SSH_RULES"
 
 # -----------------------
@@ -88,12 +62,21 @@ add_rule() {
 }
 
 # -----------------------
-# 确保链存在
+# 确保 filter 表和 SSH_RULES 链存在
 # -----------------------
+
+# 确保 filter 表存在
+if ! nft list tables | grep -q "filter"; then
+  nft add table ip filter
+  nft add table ip6 filter
+  echo "已创建 filter 表"
+fi
+
+# 确保链 SSH_RULES 存在
 if ! nft list chains ip filter | grep -q "$CHAIN"; then
   nft add chain ip filter "$CHAIN" { type filter hook input priority 0 \; }
   nft add chain ip6 filter "$CHAIN" { type filter hook input priority 0 \; }
-  echo "已创建链 $CHAIN"
+  echo "已创建链 SSH_RULES"
 fi
 
 # -----------------------
