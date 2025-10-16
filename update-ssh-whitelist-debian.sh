@@ -1,6 +1,25 @@
 #!/bin/bash
 set -euo pipefail
 
+# 确保 nftables 已安装
+if ! command -v nft >/dev/null 2>&1; then
+  echo "nftables 未安装，正在安装..."
+  apt update && apt install nftables -y
+fi
+
+# 确保 filter 表和链 SSH_RULES 存在
+if ! nft list tables | grep -q "filter"; then
+  nft add table ip filter
+  nft add table ip6 filter
+fi
+
+if ! nft list chains ip filter | grep -q "SSH_RULES"; then
+  nft add chain ip filter SSH_RULES { type filter hook input priority 0 \; }
+  nft add chain ip6 filter SSH_RULES { type filter hook input priority 0 \; }
+  echo "已创建链 SSH_RULES"
+fi
+
+
 # ===========================================================
 # 高安全 SSH 防护脚本（支持多端口 + 域名 + 固定 IP 段白名单）
 # 版本：v2.1
