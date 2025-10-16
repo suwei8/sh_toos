@@ -39,10 +39,19 @@ IP_WHITELIST=(
 CHAIN="SSH_RULES"
 
 # -----------------------
-# 前置检查
+# 自动安装缺少的工具
 # -----------------------
-command -v nft >/dev/null 2>&1 || { echo "nftables 未安装或不可用"; exit 1; }
-command -v dig >/dev/null 2>&1 || echo "warning: dig 未检测到，域名解析将被跳过（建议安装 dnsutils 或 bind9-dnsutils）"
+# 检查并安装 nftables
+if ! command -v nft >/dev/null 2>&1; then
+  echo "未检测到 nftables，正在安装 nftables..."
+  apt update && apt install nftables -y
+fi
+
+# 检查并安装 dig（域名解析工具）
+if ! command -v dig >/dev/null 2>&1; then
+  echo "未检测到 dig，正在安装 dnsutils..."
+  apt update && apt install dnsutils -y
+fi
 
 # -----------------------
 # helper: 删除可能存在的具体规则（避免重复）
@@ -134,4 +143,77 @@ done
 
 for net in "${LAN_NETS[@]}"; do
   for p in "${PORTS[@]}"; do
-    del_rule_if_exists nft add rule ip filter input_
+    del_rule_if_exists nft add rule ip filter input ip saddr "$net" tcp dport "$p" accept
+  done
+done
+
+for p in "${PORTS[@]}"; do
+  del_rule_if_exists nft add rule ip filter input tcp dport "$p" jump "$CHAIN"
+  del_rule_if_exists nft add rule ip6 filter input tcp dport "$p" jump "$CHAIN"
+done
+
+# loopback 优先
+for p in "${PORTS[@]}"; do
+  add_rule nft add rule ip filter input iifname lo tcp dport "$p" accept
+  add_rule nft add rule ip6 filter input iifname lo tcp dport "$p" accept
+  echo "已允许本地 loopback (127.0.0.1 / ::1) 访问端口 $p"
+done
+
+# 内网段优先
+pos=2
+for net in "${LAN_NETS[@]}"; do
+  if [[ "$net" =~ ^[0-9] ]]; then
+    for p in "${PORTS[@]}"; do
+      add_rule nft add rule ip filter input ip saddr "$net" tcp dport "$p" accept
+      echo "已允许内网网段 $net 访问端口 $p（位置 $pos）"
+      pos=$((pos + 1))
+    done
+  else
+    echo "跳过 LAN 网段（格式疑似不为 IPv4）: $net"
+  fi
+done
+
+# 挂接 SSH_RULES
+for p in "${PORTS[@]}"; do
+  add_rule nft add rule ip filter input tcp dport "$p" jump "$CHAIN"
+  add_rule nft add rule ip6 filter input tcp dport "$p" jump "$CHAIN"
+done
+echo "已挂接 $CHAIN 到 INPUT（公网连接经过 $CHAIN 判断） 对端口: ${PORTS[*]}"
+
+# -----------------------
+# 持久化保存
+# -----------------------
+if command -v netfilter-persistent >/dev/null 2>&1; then
+  netfilter-persistent save || echo "保存到 netfilter-persistent 失败（但规则已生效）"
+  echo "✅ 规则已保存到 netfilter-persistent"
+else
+  echo "⚠️ 未检测到持久化工具，规则只在当前会话有效（重启后可能丢失）"
+fi
+
+# -----------------------
+# 状态输出
+# -----------------------
+echo
+echo "📜 最近的 SSH 登录失败记录："
+if [ -f /var/log/auth.log ]; then
+  tail -n 200 /var/log/auth.log | egrep "Failed password|Invalid user|authentication failure|Connection closed by authenticating user" || true
+elif [ -f /var/log/secure ]; then
+  tail -n 200 /var/log/secure | egrep "Failed password|Invalid user|authentication failure|Connection closed by authenticating user" || true
+else
+  echo "未找到常见的认证日志文件"
+fi
+
+echo
+echo "🛡 当前 INPUT 规则（IPv4 前30行）："
+nft list ruleset | head -n 30 || true
+
+echo
+echo "🛡 当前 $CHAIN 链规则（IPv4）："
+nft list ruleset | grep "$CHAIN" || true
+
+echo
+echo "🛡 当前 $CHAIN 链规则（IPv6）："
+nft list ruleset | grep "$CHAIN" || true
+
+echo
+echo "✅ 完成。已对端口 ${PORTS[*]} 应用规则。请确认 cloudflared 服务绑定在本地端口。"
