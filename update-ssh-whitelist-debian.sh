@@ -69,21 +69,21 @@ add_rule() {
 }
 
 # -----------------------
+# 确保链存在
+# -----------------------
+if ! nft list chains ip filter | grep -q "$CHAIN"; then
+  nft add chain ip filter "$CHAIN" { type filter hook input priority 0 \; }
+  nft add chain ip6 filter "$CHAIN" { type filter hook input priority 0 \; }
+  echo "已创建链 $CHAIN"
+fi
+
+# -----------------------
 # 清理旧链并重建
 # -----------------------
 for p in "${PORTS[@]}"; do
   nft delete rule ip filter input tcp dport "$p" 2>/dev/null || true
   nft delete rule ip6 filter input tcp dport "$p" 2>/dev/null || true
 done
-
-# 删除旧的链
-if nft list tables | grep -q "$CHAIN"; then
-  nft delete chain ip filter "$CHAIN" 2>/dev/null || true
-  nft delete chain ip6 filter "$CHAIN" 2>/dev/null || true
-fi
-
-nft add chain ip filter "$CHAIN" { type filter hook input priority 0 \; } 2>/dev/null || true
-nft add chain ip6 filter "$CHAIN" { type filter hook input priority 0 \; } 2>/dev/null || true
 
 # -----------------------
 # 域名白名单（IPv4 + IPv6）
