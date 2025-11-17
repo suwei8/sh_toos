@@ -16,7 +16,7 @@ RUNNER_SHA256="56768348b3d643a6a29d4ad71e9bdae0dc0ef1eb01afe0f7a8ee097b039bfaaf"
 # 创建的系统用户
 RUNNER_USER="ghrunner"
 # 给 ghrunner 设置的系统登录密码（如不需要登录，可以随便设一个复杂密码即可）
-RUNNER_PASSWORD="ChangeMe_123!"
+RUNNER_PASSWORD="sw63828"
 
 #########################
 # 运行时输入 runner token
