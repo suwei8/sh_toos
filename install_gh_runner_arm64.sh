@@ -72,9 +72,13 @@ echo '即将执行 ./config.sh，请根据提示完成交互（runner 名称等�
 "
 
 echo "==> 安装并启动 runner 服务 ..."
-cd "${RUNNER_DIR}"
-./svc.sh install
-./svc.sh start
+sudo -u "${RUNNER_USER}" bash -lc "
+set -euo pipefail
+cd '${RUNNER_DIR}'
+./svc.sh uninstall || true
+sudo ./svc.sh install
+sudo ./svc.sh start
+"
 
 echo "==> GitHub Actions Runner (ARM64) 已安装并以服务方式启动."
 echo "仓库：${REPO_URL}"
