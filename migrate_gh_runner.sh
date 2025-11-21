@@ -6,13 +6,16 @@ RUNNER_USER="ghrunner"
 RUNNER_DIR="/home/${RUNNER_USER}/actions-runner"
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "❌ 必须用 root 运行"
+  echo "❌ 必须用 root 运行：TOKEN=... NAME=... bash migrate_gh_runner_simple.sh"
   exit 1
 fi
 
-RUNNER_TOKEN="${TOKEN:-}"
-if [ -z "$RUNNER_TOKEN" ]; then
-  echo "❌ 环境变量 TOKEN 为空"
+TOKEN="${TOKEN:-}"
+NAME="${NAME:-}"
+
+if [ -z "$TOKEN" ] || [ -z "$NAME" ]; then
+  echo "❌ 必须提供 TOKEN 和 NAME 环境变量"
+  echo '   例：TOKEN="xxx" NAME="singapore-2-xxx-Ubuntu20" bash migrate_gh_runner_simple.sh'
   exit 1
 fi
 
@@ -21,88 +24,36 @@ if [ ! -d "$RUNNER_DIR" ]; then
   exit 1
 fi
 
-echo "==> [root] 停止并删除旧服务..."
-
-SERVICE_FILE=""
+echo "==> [root] 停旧服务并删掉旧 service（如果有）..."
 if ls /etc/systemd/system/actions.runner.*.service >/dev/null 2>&1; then
-  SERVICE_FILE="$(ls /etc/systemd/system/actions.runner.*.service | head -n1 || true)"
-  if [ -n "$SERVICE_FILE" ]; then
-    SVC_NAME="$(basename "$SERVICE_FILE")"
-    systemctl stop "$SVC_NAME" || true
-    systemctl disable "$SVC_NAME" || true
-    rm -f "$SERVICE_FILE"
-  fi
+  for svc in /etc/systemd/system/actions.runner.*.service; do
+    [ -e "$svc" ] || continue
+    systemctl stop "$(basename "$svc")" || true
+    systemctl disable "$(basename "$svc")" || true
+    rm -f "$svc"
+  done
+  systemctl daemon-reload || true
 fi
 
-systemctl daemon-reload || true
+echo "==> [ghrunner] 清理旧配置并重新注册..."
 
-OLD_NAME=""
-if [ -n "${SERVICE_FILE:-}" ]; then
-  OLD_NAME="$(basename "$SERVICE_FILE" | sed -E 's/actions\.runner\.[^.]+\.(.+)\.service/\1/')" || true
-fi
-
-# 可选手动指定名称
-RUNNER_NAME="${RUNNER_NAME:-}"
-
-export ORG_URL RUNNER_DIR RUNNER_TOKEN OLD_NAME RUNNER_NAME
-
-echo "==> [root] 切换到 ghrunner 执行 config..."
-
-su "$RUNNER_USER" << 'EOF'
-set -euo pipefail
-
-cd "$RUNNER_DIR"
-
-rm -f .runner .runner_migrated .credentials .credentials_rsaparams .runner.env || true
-
-FINAL_NAME="${OLD_NAME:-}"
-
-# 如果上面没解析到，就用环境变量 RUNNER_NAME
-if [ -z "$FINAL_NAME" ] && [ -n "${RUNNER_NAME:-}" ]; then
-  FINAL_NAME="$RUNNER_NAME"
-fi
-
-if [ -z "$FINAL_NAME" ]; then
-  echo "❌ 无法自动解析原名称，且未提供 RUNNER_NAME 环境变量"
-  echo "   请用：TOKEN=\"...\" RUNNER_NAME=\"<原名字>\" bash migrate_gh_runner.sh"
-  exit 1
-fi
-
-echo "   使用名称：$FINAL_NAME"
-
-set +e
-./config.sh \
-  --url "$ORG_URL" \
-  --token "$RUNNER_TOKEN" \
-  --name "$FINAL_NAME" \
-  --runnergroup "Default" \
-  --labels "self-hosted,linux,x64" \
-  --unattended
-RC=$?
-set -e
-
-if [ $RC -ne 0 ]; then
-  echo "⚠️ config 失败，尝试 remove 再重试"
-
-  ./config.sh remove || true
-  rm -f .runner .credentials .credentials_rsaparams .runner.env .runner_migrated || true
-
+sudo -u "$RUNNER_USER" bash -c "
+  set -euo pipefail
+  cd '$RUNNER_DIR'
+  rm -f .runner .runner_migrated .credentials .credentials_rsaparams .runner.env || true
   ./config.sh \
-    --url "$ORG_URL" \
-    --token "$RUNNER_TOKEN" \
-    --name "$FINAL_NAME" \
-    --runnergroup "Default" \
-    --labels "self-hosted,linux,x64" \
+    --url '$ORG_URL' \
+    --token '$TOKEN' \
+    --name '$NAME' \
+    --runnergroup 'Default' \
+    --labels 'self-hosted,linux,x64' \
     --unattended
-fi
+"
 
-echo "   ✅ 注册成功：$FINAL_NAME"
-EOF
-
-echo "==> [root] 安装并启动新服务..."
+echo "==> [root] 安装并启动新 service..."
 cd "$RUNNER_DIR"
 ./svc.sh install || true
 ./svc.sh start || true
 
 echo
-echo "🎉 完成：Runner 已迁移"
+echo "🎉 完成：Runner 名称 = $NAME"
