@@ -41,7 +41,10 @@ if [ -n "${SERVICE_FILE:-}" ]; then
   OLD_NAME="$(basename "$SERVICE_FILE" | sed -E 's/actions\.runner\.[^.]+\.(.+)\.service/\1/')" || true
 fi
 
-export ORG_URL RUNNER_DIR RUNNER_TOKEN OLD_NAME
+# 可选手动指定名称
+RUNNER_NAME="${RUNNER_NAME:-}"
+
+export ORG_URL RUNNER_DIR RUNNER_TOKEN OLD_NAME RUNNER_NAME
 
 echo "==> [root] 切换到 ghrunner 执行 config..."
 
@@ -54,16 +57,14 @@ rm -f .runner .runner_migrated .credentials .credentials_rsaparams .runner.env |
 
 FINAL_NAME="${OLD_NAME:-}"
 
-# 自动解析失败 → 让用户输入
-if [ -z "$FINAL_NAME" ]; then
-  echo "⚠️  自动解析原名称失败"
-  echo -n "👉 请输入这台机器原来的 Runner 完整名称: "
-  read FINAL_NAME
+# 如果上面没解析到，就用环境变量 RUNNER_NAME
+if [ -z "$FINAL_NAME" ] && [ -n "${RUNNER_NAME:-}" ]; then
+  FINAL_NAME="$RUNNER_NAME"
 fi
 
-# 最终必须有名字
 if [ -z "$FINAL_NAME" ]; then
-  echo "❌ 你没有输入名称，无法继续"
+  echo "❌ 无法自动解析原名称，且未提供 RUNNER_NAME 环境变量"
+  echo "   请用：TOKEN=\"...\" RUNNER_NAME=\"<原名字>\" bash migrate_gh_runner.sh"
   exit 1
 fi
 
