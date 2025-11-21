@@ -6,7 +6,7 @@ RUNNER_USER="ghrunner"
 RUNNER_DIR="/home/${RUNNER_USER}/actions-runner"
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "❌ 必须用 root 运行：TOKEN=\"xxx\" bash migrate_gh_runner.sh"
+  echo "❌ 必须用 root 运行"
   exit 1
 fi
 
@@ -25,7 +25,7 @@ echo "==> [root] 停止并删除旧服务..."
 
 SERVICE_FILE=""
 if ls /etc/systemd/system/actions.runner.*.service >/dev/null 2>&1; then
-  SERVICE_FILE="$(ls /etc/systemd/system/actions.runner.*.service 2>/dev/null | head -n1 || true)"
+  SERVICE_FILE="$(ls /etc/systemd/system/actions.runner.*.service | head -n1 || true)"
   if [ -n "$SERVICE_FILE" ]; then
     SVC_NAME="$(basename "$SERVICE_FILE")"
     systemctl stop "$SVC_NAME" || true
@@ -36,10 +36,8 @@ fi
 
 systemctl daemon-reload || true
 
-# 从旧 service 文件推 runner 名
 OLD_NAME=""
 if [ -n "${SERVICE_FILE:-}" ]; then
-  # actions.runner.<org>.<runnername>.service
   OLD_NAME="$(basename "$SERVICE_FILE" | sed -E 's/actions\.runner\.[^.]+\.(.+)\.service/\1/')" || true
 fi
 
@@ -52,39 +50,25 @@ set -euo pipefail
 
 cd "$RUNNER_DIR"
 
-echo "   - 清理本地旧配置文件 (.runner / .runner_migrated / .credentials*)..."
 rm -f .runner .runner_migrated .credentials .credentials_rsaparams .runner.env || true
 
-echo "   - 解析原名称..."
+FINAL_NAME="${OLD_NAME:-}"
 
-FINAL_NAME=""
-
-# 1. 优先用 root 通过 service 文件传进来的 OLD_NAME
-if [ -n "${OLD_NAME:-}" ]; then
-  FINAL_NAME="$OLD_NAME"
-fi
-
-# 2. 再看 .runner
-if [ -z "$FINAL_NAME" ] && [ -f ".runner" ]; then
-  FINAL_NAME="$(sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/p' .runner | head -n1 || true)"
-fi
-
-# 3. 再看 .runner_migrated
-if [ -z "$FINAL_NAME" ] && [ -f ".runner_migrated" ]; then
-  FINAL_NAME="$(sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/p' .runner_migrated | head -n1 || true)"
-fi
-
+# 自动解析失败 → 让用户输入
 if [ -z "$FINAL_NAME" ]; then
-  echo "❌ 自动解析原名称失败："
-  echo "   - 没有可用的 service 文件"
-  echo "   - 也没有 .runner / .runner_migrated"
-  echo "   这台机子已经彻底丢失名字，只能你手动指定。"
+  echo "⚠️  自动解析原名称失败"
+  echo -n "👉 请输入这台机器原来的 Runner 完整名称: "
+  read FINAL_NAME
+fi
+
+# 最终必须有名字
+if [ -z "$FINAL_NAME" ]; then
+  echo "❌ 你没有输入名称，无法继续"
   exit 1
 fi
 
-echo "   ✅ 原名称：$FINAL_NAME"
+echo "   使用名称：$FINAL_NAME"
 
-echo "   - 第一次尝试执行 config.sh..."
 set +e
 ./config.sh \
   --url "$ORG_URL" \
@@ -97,14 +81,11 @@ RC=$?
 set -e
 
 if [ $RC -ne 0 ]; then
-  echo "   ⚠️ 第一次 config 失败，尝试自动 remove 再重试一次..."
-  # 尝试清理本地“已配置”状态
-  set +e
-  ./config.sh remove || true
-  rm -f .runner .runner_migrated .credentials .credentials_rsaparams .runner.env || true
-  set -e
+  echo "⚠️ config 失败，尝试 remove 再重试"
 
-  echo "   - 第二次重试执行 config.sh..."
+  ./config.sh remove || true
+  rm -f .runner .credentials .credentials_rsaparams .runner.env .runner_migrated || true
+
   ./config.sh \
     --url "$ORG_URL" \
     --token "$RUNNER_TOKEN" \
@@ -114,7 +95,7 @@ if [ $RC -ne 0 ]; then
     --unattended
 fi
 
-echo "   ✅ ghrunner 下 config.sh 完成"
+echo "   ✅ 注册成功：$FINAL_NAME"
 EOF
 
 echo "==> [root] 安装并启动新服务..."
@@ -123,5 +104,4 @@ cd "$RUNNER_DIR"
 ./svc.sh start || true
 
 echo
-echo "🎉 迁移完成：Runner 已重新绑定到 $ORG_URL"
-echo "   （如有极少数机器提示“自动解析原名称失败”，那台就只能手动指定名字）"
+echo "🎉 完成：Runner 已迁移"
