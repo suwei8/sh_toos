@@ -31,6 +31,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Hardcode Default URL if not provided
+if [[ -z "$REPO_URL" ]]; then
+    REPO_URL="https://github.com/dianma365"
+fi
+
 RUNNER_USER="ghrunner"
 RUNNER_HOME="/home/${RUNNER_USER}"
 RUNNER_DIR="${RUNNER_HOME}/actions-runner"
