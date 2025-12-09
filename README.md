@@ -1,55 +1,55 @@
 # Shell Tools
 
-Collection of shell scripts for various utilities.
+各种实用 Shell 脚本的集合。
 
 ## GitHub Runner Installation (ARM64)
 
-This script automates the installation of self-hosted GitHub Runners on ARM64 (aarch64) Linux systems.
+此脚本用于在 ARM64 (aarch64) Linux 系统上自动安装自托管 GitHub Runner。
 
-### Features
-- **Auto-detection**: Automatically detects architecture and installs dependencies.
-- **Interactive Configuration**: Prompts for Runner Name and Labels during setup.
-- **Sudo Support**: Runs safely with `sudo` for privileged operations.
-- **Service Management**: Automatically installs and starts the systemd service.
+### 功能特点
+- **自动检测**: 自动检测系统架构并安装依赖项。
+- **交互式配置**: 安装过程中提示输入 Runner 名称和标签。
+- **Sudo 支持**: 通过 `sudo` 安全运行特权操作。
+- **服务管理**: 自动安装并启动 systemd 服务。
 
-### Installation
+### 安装方法
 
-**1. One-line Install (Recommended)**
+**1. 一键安装 (推荐)**
 
-Use the following command to download and run the script. It includes a cache-buster to ensure you get the latest version.
+使用以下命令下载并运行脚本。该命令包含防缓存参数，确保下载到最新版本。
 
 ```bash
 curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/install_gh_runner_arm64.sh?v=$(date +%s)" -o install_gh_runner_arm64.sh && chmod +x install_gh_runner_arm64.sh && ./install_gh_runner_arm64.sh --token YOUR_TOKEN
 ```
 
-**2. Interactive Mode**
+**2. 交互模式**
 
-The script is pre-configured for `https://github.com/dianma365`. You only need to provide the token.
-When the script asks for **Runner Name** or **Labels**, you can type them in.
+脚本已预配置仓库 `https://github.com/dianma365`。您只需提供 Token。
+当脚本询问 **Runner Name** 或 **Labels** 时，您可以手动输入。
 
 ```bash
 ./install_gh_runner_arm64.sh --token YOUR_TOKEN
 ```
 
-**3. Custom Repository**
+**3. 自定义仓库**
 
-If you want to install for a different repository:
+如果您需要为其他仓库安装 Runner：
 
 ```bash
 ./install_gh_runner_arm64.sh https://github.com/your/repo --token YOUR_TOKEN
 ```
 
-### Uninstallation
+### 卸载
 
-If you need to remove the runner (e.g., to rename it or clean up):
+如果需要移除 Runner (例如重命名或清理环境)：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/main/uninstall_gh_runner_arm64.sh -o uninstall_gh_runner_arm64.sh && chmod +x uninstall_gh_runner_arm64.sh && ./uninstall_gh_runner_arm64.sh
 ```
-> **Warning**: This will remove the runner service, user (`ghrunner`), and all local files in `/home/ghrunner`.
+> **警告**: 此操作将删除 runner 服务、用户 (`ghrunner`) 以及 `/home/ghrunner` 目录下的所有文件。
 
 ### x64 (Intel/AMD)
-(Legacy script for x64 systems)
+(适用于 x64 系统的旧版脚本)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/main/install_gh_runner.sh -o install_gh_runner.sh && chmod +x install_gh_runner.sh && sudo ./install_gh_runner.sh
 ```
