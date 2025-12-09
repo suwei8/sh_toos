@@ -121,22 +121,22 @@ get_input() {
 }
 
 get_latest_version() {
-    log_info "Fetching latest GitHub Runner version..."
+    log_info "Fetching latest GitHub Runner version..." >&2
     local api_url="https://api.github.com/repos/actions/runner/releases/latest"
     local version_tag
     
     # Attempt to fetch latest version
     if version_tag=$(curl -s "$api_url" | jq -r .tag_name | sed 's/^v//'); then
         if [[ "$version_tag" == "null" || -z "$version_tag" ]]; then
-             log_warn "Could not fetch latest version (API limitation). Using default."
+             log_warn "Could not fetch latest version (API limitation). Using default." >&2
              version_tag="2.321.0"
         fi
     else
-        log_warn "Failed to query GitHub API. Using default version."
+        log_warn "Failed to query GitHub API. Using default version." >&2
         version_tag="2.321.0"
     fi
     
-    log_info "Target runner version: $version_tag"
+    log_info "Target runner version: $version_tag" >&2
     echo "$version_tag"
 }
 
