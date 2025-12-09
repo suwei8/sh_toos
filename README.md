@@ -5,8 +5,11 @@ Collection of shell scripts for various utilities.
 ## GitHub Runner Installation (ARM64)
 
 ### Quick Start
+> [!NOTE]
+> If you recently ran this script and encountered errors, please use the command below which includes a cache-buster.
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/main/install_gh_runner_arm64.sh -o install_gh_runner_arm64.sh && chmod +x install_gh_runner_arm64.sh && ./install_gh_runner_arm64.sh --token YOUR_TOKEN
+curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/install_gh_runner_arm64.sh?v=$(date +%s)" -o install_gh_runner_arm64.sh && chmod +x install_gh_runner_arm64.sh && ./install_gh_runner_arm64.sh --token YOUR_TOKEN
 ```
 
 ### Usage Options
