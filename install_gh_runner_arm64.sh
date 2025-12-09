@@ -203,7 +203,6 @@ configure_runner() {
     $SUDO_CMD -u "${RUNNER_USER}" "${RUNNER_DIR}/config.sh" \
         --url "${REPO_URL}" \
         --token "${RUNNER_TOKEN}" \
-        --unattended \
         --replace
 }
 
