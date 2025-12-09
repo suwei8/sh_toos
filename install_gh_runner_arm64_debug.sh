@@ -227,19 +227,7 @@ check_arch
 install_dependencies
 get_input
 
-
 VERSION=$(get_latest_version)
-
-# Sanity check validation to prevent capturing logs (defensive coding)
-if [[ "$VERSION" == *"[INFO]"* ]] || [[ "$VERSION" == *"[WARN]"* ]] || [[ -z "$VERSION" ]]; then
-    log_warn "Version detection returned unexpected output: $VERSION"
-    log_warn "Falling back to default stable version."
-    VERSION="2.321.0"
-else
-    # clean up any whitespace
-    VERSION=$(echo "$VERSION" | tr -d '[:space:]')
-fi
-
 
 create_system_user
 setup_directory
