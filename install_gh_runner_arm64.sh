@@ -1,85 +1,233 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-#########################
-# 可配置项（每台机器前先改）
-#########################
+# ==============================================================================
+# Configuration
+# ==============================================================================
+# Default Configuration
+REPO_URL=""
+RUNNER_TOKEN=""
 
-# 你的 GitHub 仓库地址
-REPO_URL="https://github.com/suwei8/oci-ops"
+# Parse Arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --token)
+            RUNNER_TOKEN="$2"
+            shift 2
+            ;;
+        --help|-h)
+            echo "Usage: $0 [REPO_URL] [--token TOKEN]"
+            exit 0
+            ;;
+        *)
+            if [[ -z "$REPO_URL" ]]; then
+                REPO_URL="$1"
+            else
+                echo "Unknown argument: $1"
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
 
-# Runner 版本与校验值（ARM64）
-RUNNER_VERSION="2.329.0"
-RUNNER_ARCH="arm64"
-RUNNER_SHA256="56768348b3d643a6a29d4ad71e9bdae0dc0ef1eb01afe0f7a8ee097b039bfaaf"
-
-# 创建的系统用户
 RUNNER_USER="ghrunner"
-# 给 ghrunner 设置的系统登录密码（如不需要登录，可以随便设一个复杂密码即可）
-RUNNER_PASSWORD="sw63828"
-
-#########################
-# 运行时输入 runner token
-#########################
-
-if [[ $EUID -ne 0 ]]; then
-  echo "请用 root 用户或通过 sudo 执行此脚本."
-  exit 1
-fi
-
-read -rp "请输入 GitHub Runner 注册用的 TOKEN: " RUNNER_TOKEN
-if [[ -z "${RUNNER_TOKEN}" ]]; then
-  echo "TOKEN 不能为空."
-  exit 1
-fi
-
 RUNNER_HOME="/home/${RUNNER_USER}"
 RUNNER_DIR="${RUNNER_HOME}/actions-runner"
+RUNNER_ARCH="arm64" 
+SUDO_CMD=""
 
-echo "==> 检查/创建用户 ${RUNNER_USER} ..."
-if ! id "${RUNNER_USER}" &>/dev/null; then
-  useradd -m -s /bin/bash "${RUNNER_USER}"
-  echo "${RUNNER_USER}:${RUNNER_PASSWORD}" | chpasswd
-  usermod -aG sudo "${RUNNER_USER}"
-  echo "用户 ${RUNNER_USER} 已创建并加入 sudo 组."
-else
-  echo "用户 ${RUNNER_USER} 已存在，跳过创建."
-fi
+# ==============================================================================
+# Helper Functions
+# ==============================================================================
 
-echo "==> 以 ${RUNNER_USER} 用户下载并解压 GitHub Actions Runner (ARM64) ..."
-sudo -u "${RUNNER_USER}" bash -lc "
-set -euo pipefail
-mkdir -p '${RUNNER_DIR}'
-cd '${RUNNER_DIR}'
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
-FILE=\"actions-runner-linux-${RUNNER_ARCH}-${RUNNER_VERSION}.tar.gz\"
+log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_err() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-if [[ ! -f \"\$FILE\" ]]; then
-  echo '下载 runner 压缩包 (ARM64) ...'
-  curl -o \"\$FILE\" -L \"https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/\$FILE\"
-else
-  echo '已存在压缩包 \$FILE，跳过下载.'
-fi
+check_privileges() {
+    if [[ $EUID -eq 0 ]]; then
+        SUDO_CMD=""
+    elif command -v sudo &> /dev/null; then
+        SUDO_CMD="sudo"
+        # Validate sudo access
+        if ! sudo -n true 2>/dev/null; then
+            log_warn "Sudo password may be required."
+            sudo true
+        fi
+    else
+        log_err "This script requires root privileges or sudo access."
+        exit 1
+    fi
+}
 
-echo '校验压缩包 SHA256 ...'
-echo '${RUNNER_SHA256}  '\$FILE | shasum -a 256 -c
+check_arch() {
+    local arch
+    arch=$(uname -m)
+    case "$arch" in
+        aarch64|arm64)
+            log_info "Detected ARM64 architecture ($arch)."
+            ;;
+        *)
+            log_err "Architecture $arch is not supported. This script is for ARM64 only."
+            exit 1
+            ;;
+    esac
+}
 
-echo '解压 runner ...'
-tar xzf \"./\$FILE\"
+install_dependencies() {
+    log_info "Checking and installing dependencies..."
+    local deps=(curl jq tar)
+    # Check if we need to install anything
+    local missing=()
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" &> /dev/null; then
+            missing+=("$dep")
+        fi
+    done
 
-echo '即将执行 ./config.sh，请根据提示完成交互（runner 名称等）...'
-./config.sh --url '${REPO_URL}' --token '${RUNNER_TOKEN}'
-"
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        log_info "Installing missing dependencies: ${missing[*]}"
+        $SUDO_CMD apt-get update -qq
+        $SUDO_CMD apt-get install -y "${missing[@]}"
+    fi
+}
 
-echo "==> 安装并启动 runner 服务 ..."
-sudo -u "${RUNNER_USER}" bash -lc "
-set -euo pipefail
-cd '${RUNNER_DIR}'
-./svc.sh uninstall || true
-sudo ./svc.sh install
-sudo ./svc.sh start
-"
+get_input() {
+    # If variables are not set, prompt user
+    if [[ -z "$REPO_URL" ]]; then
+        read -rp "Enter GitHub Repository URL (e.g., https://github.com/user/repo): " REPO_URL
+    fi
 
-echo "==> GitHub Actions Runner (ARM64) 已安装并以服务方式启动."
-echo "仓库：${REPO_URL}"
-echo "用户：${RUNNER_USER}"
+    if [[ -z "$RUNNER_TOKEN" ]]; then
+        read -rp "Enter GitHub Runner Registration Token: " RUNNER_TOKEN
+    fi
+
+    if [[ -z "$REPO_URL" || -z "$RUNNER_TOKEN" ]]; then
+        log_err "Repository URL and Token are required."
+        exit 1
+    fi
+}
+
+get_latest_version() {
+    log_info "Fetching latest GitHub Runner version..."
+    local api_url="https://api.github.com/repos/actions/runner/releases/latest"
+    local version_tag
+    
+    # Attempt to fetch latest version
+    if version_tag=$(curl -s "$api_url" | jq -r .tag_name | sed 's/^v//'); then
+        if [[ "$version_tag" == "null" || -z "$version_tag" ]]; then
+             log_warn "Could not fetch latest version (API limitation). Using default."
+             version_tag="2.321.0"
+        fi
+    else
+        log_warn "Failed to query GitHub API. Using default version."
+        version_tag="2.321.0"
+    fi
+    
+    log_info "Target runner version: $version_tag"
+    echo "$version_tag"
+}
+
+create_system_user() {
+    log_info "Ensuring runner user '${RUNNER_USER}' exists..."
+    if ! id "${RUNNER_USER}" &>/dev/null; then
+        $SUDO_CMD useradd -m -s /bin/bash "${RUNNER_USER}"
+        # Lock password for security (service account)
+        # $SUDO_CMD passwd -l "${RUNNER_USER}" 
+        
+        # Add to sudo group if needed (optional, usually safer NOT to, but user might need it for workflows)
+        # Uncomment below if runner needs sudo
+        $SUDO_CMD usermod -aG sudo "${RUNNER_USER}"
+        
+        # Ensure 'sudo' allows this user to run without password? 
+        # Usually we don't want to modify sudoers automatically without asking.
+        
+        log_info "User ${RUNNER_USER} created."
+    else
+        log_info "User ${RUNNER_USER} already exists."
+    fi
+}
+
+setup_directory() {
+    log_info "Preparing directory: ${RUNNER_DIR}"
+    if [[ ! -d "${RUNNER_DIR}" ]]; then
+        $SUDO_CMD mkdir -p "${RUNNER_DIR}"
+    fi
+    $SUDO_CMD chown -R "${RUNNER_USER}:${RUNNER_USER}" "${RUNNER_HOME}"
+}
+
+install_runner_binaries() {
+    local version="$1"
+    local runner_file="actions-runner-linux-${RUNNER_ARCH}-${version}.tar.gz"
+    local download_url="https://github.com/actions/runner/releases/download/v${version}/${runner_file}"
+
+    # Verify if already installed
+    if [[ -f "${RUNNER_DIR}/config.sh" ]]; then
+        log_info "Runner binaries appear to be present."
+        return
+    fi
+    
+    log_info "Downloading runner binaries..."
+    
+    # Download as the runner user to avoid permission issues later, or just fix permissions after
+    # Using runuser/sudo to do it as the user is cleaner
+    $SUDO_CMD -u "${RUNNER_USER}" bash -c "
+        cd '${RUNNER_DIR}'
+        if [[ ! -f '${runner_file}' ]]; then
+            curl -o '${runner_file}' -L '${download_url}'
+        fi
+        echo 'Extracting...'
+        tar xzf '${runner_file}'
+    "
+}
+
+configure_runner() {
+    if [[ -f "${RUNNER_DIR}/.runner" ]]; then
+        log_warn "Runner is already configured. Skipping configuration."
+        return
+    fi
+
+    log_info "Configuring runner..."
+    $SUDO_CMD -u "${RUNNER_USER}" "${RUNNER_DIR}/config.sh" \
+        --url "${REPO_URL}" \
+        --token "${RUNNER_TOKEN}" \
+        --unattended \
+        --replace
+}
+
+install_service() {
+    log_info "Installing and starting systemd service..."
+    cd "${RUNNER_DIR}"
+    
+    # Use the svc.sh script provided by the runner
+    # It must be run with sudo/root
+    $SUDO_CMD ./svc.sh install "${RUNNER_USER}" || true # Ignore if already registered
+    $SUDO_CMD ./svc.sh start || echo "Service might already be running."
+    $SUDO_CMD ./svc.sh status
+}
+
+# ==============================================================================
+# Main Execution
+# ==============================================================================
+
+check_privileges
+check_arch
+install_dependencies
+get_input
+
+VERSION=$(get_latest_version)
+
+create_system_user
+setup_directory
+install_runner_binaries "$VERSION"
+configure_runner
+install_service
+
+log_info "Installation and setup complete!"
