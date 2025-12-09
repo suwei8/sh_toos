@@ -23,6 +23,13 @@ The script is pre-configured for `https://github.com/dianma365`.
 ./install_gh_runner_arm64.sh https://github.com/other/repo --token A1B2C3D4E5
 ```
 
+### Uninstallation
+If you need to remove the runner (to re-configure or clean up):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/main/uninstall_gh_runner_arm64.sh -o uninstall_gh_runner_arm64.sh && chmod +x uninstall_gh_runner_arm64.sh && ./uninstall_gh_runner_arm64.sh
+```
+
 ### x64 (Intel/AMD)
 (Standard legacy script)
 ```bash
