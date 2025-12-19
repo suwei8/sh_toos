@@ -111,8 +111,14 @@ install_xrdp() {
     usermod -aG ssl-cert xrdp
     
     # 配置 xRDP 监听本地（用于 Cloudflare Tunnel）
+    # 只修改 [Globals] 部分的 port，不影响其他 section
     log_info "配置 xRDP 监听 127.0.0.1:3389..."
-    sed -i 's/^port=.*/port=tcp:\/\/127.0.0.1:3389/' /etc/xrdp/xrdp.ini
+    awk '
+        /^\[Globals\]/ { in_globals=1 }
+        /^\[/ && !/^\[Globals\]/ { in_globals=0 }
+        in_globals && /^port=/ { print "port=tcp://.:3389"; next }
+        { print }
+    ' /etc/xrdp/xrdp.ini > /etc/xrdp/xrdp.ini.tmp && mv /etc/xrdp/xrdp.ini.tmp /etc/xrdp/xrdp.ini
     
     # 关键修复: 修改 startwm.sh 以支持 Chromium snap
     log_info "应用 Chromium snap 兼容性修复..."
