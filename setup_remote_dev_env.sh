@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # 全自动远程开发环境部署脚本
-# 适用于: Oracle Cloud VM.Standard.A1.Flex (ARM64) + Ubuntu 20.04.6 LTS
+# 适用于: Oracle Cloud VM.Standard.A1.Flex (ARM64)
+# 支持: Ubuntu 20.04 LTS / Ubuntu 22.04 LTS
 # ==============================================================================
 set -euo pipefail
+
+# 检测 Ubuntu 版本
+if [[ -f /etc/os-release ]]; then
+    source /etc/os-release
+    UBUNTU_VERSION="${VERSION_ID:-unknown}"
+else
+    UBUNTU_VERSION="unknown"
+fi
 
 # ==============================================================================
 # Configuration
@@ -153,11 +162,28 @@ POLKIT_EOF
 }
 
 # ==============================================================================
-# 5. 安装 Chromium 浏览器 (via snap)
+# 5. 安装 Chromium 浏览器
+# Ubuntu 20.04: 使用 snap (在 xRDP 中可正常工作)
+# Ubuntu 22.04: 使用 Flatpak (snap 有 cgroup 兼容性问题)
 # ==============================================================================
 install_chromium() {
-    log_section "5. 安装 Chromium 浏览器 (via snap)"
+    log_section "5. 安装 Chromium 浏览器"
     
+    if [[ "$UBUNTU_VERSION" == "20.04" ]]; then
+        log_info "Ubuntu 20.04 检测到，使用 snap 安装 Chromium..."
+        install_chromium_snap
+    elif [[ "$UBUNTU_VERSION" == "22.04" ]]; then
+        log_info "Ubuntu 22.04 检测到，使用 Flatpak 安装 Chromium..."
+        log_info "(snap 版本在 xRDP 中有 cgroup 兼容性问题)"
+        install_chromium_flatpak
+    else
+        log_warn "未知 Ubuntu 版本 ($UBUNTU_VERSION)，尝试使用 snap 安装..."
+        install_chromium_snap
+    fi
+}
+
+# Chromium via Snap (Ubuntu 20.04)
+install_chromium_snap() {
     # 确保 snapd 已安装并运行
     if ! command -v snap &>/dev/null; then
         apt-get install -y snapd
@@ -174,8 +200,36 @@ install_chromium() {
         snap install chromium
     fi
     
-    log_info "Chromium 浏览器安装完成"
-    log_info "版本: $(snap list chromium | tail -1 | awk '{print $2}')"
+    log_info "Chromium (snap) 安装完成"
+}
+
+# Chromium via Flatpak (Ubuntu 22.04)
+install_chromium_flatpak() {
+    # 安装 Flatpak
+    apt-get install -y flatpak
+    flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+    
+    # 安装 Chromium
+    flatpak install -y flathub org.chromium.Chromium
+    
+    # 创建 chromium-xrdp 启动脚本
+    cat > /usr/local/bin/chromium-xrdp << 'EOF'
+#!/bin/bash
+# Chromium wrapper for xRDP sessions on Ubuntu 22.04
+exec flatpak run org.chromium.Chromium "$@"
+EOF
+    chmod +x /usr/local/bin/chromium-xrdp
+    
+    # 修复 XDG_DATA_DIRS 以便 Flatpak 应用出现在菜单中
+    if ! grep -q 'flatpak/exports/share' /etc/profile.d/flatpak.sh 2>/dev/null; then
+        cat > /etc/profile.d/flatpak.sh << 'EOF'
+# Flatpak XDG_DATA_DIRS fix
+export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+EOF
+    fi
+    
+    log_info "Chromium (Flatpak) 安装完成"
+    log_info "在 xRDP 中使用命令: chromium-xrdp"
 }
 
 # ==============================================================================
