@@ -92,7 +92,7 @@ install_desktop() {
     echo "lightdm shared/default-x-display-manager select lightdm" | debconf-set-selections
     
     # 使用非交互模式安装
-    DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies lightdm lightdm-gtk-greeter
+    DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies xfce4-screenshooter lightdm lightdm-gtk-greeter
     
     # 配置 LightDM 为默认显示管理器
     echo "/usr/sbin/lightdm" > /etc/X11/default-display-manager
@@ -410,6 +410,44 @@ GIT_EOF
 }
 
 # ==============================================================================
+# 12. 启用 BBR TCP 拥塞控制
+# ==============================================================================
+enable_bbr() {
+    log_section "12. 启用 BBR TCP 拥塞控制"
+    
+    # 检查内核是否支持 BBR
+    if ! modprobe tcp_bbr &>/dev/null; then
+        log_warn "当前内核不支持 BBR，跳过配置"
+        return
+    fi
+    
+    # 检查是否已启用
+    if sysctl net.ipv4.tcp_congestion_control 2>/dev/null | grep -q bbr; then
+        log_info "BBR 已启用"
+        return
+    fi
+    
+    # 配置 sysctl
+    log_info "配置 sysctl 启用 BBR..."
+    cat >> /etc/sysctl.conf << 'EOF'
+
+# BBR TCP Congestion Control
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+EOF
+    
+    # 立即应用
+    sysctl -p
+    
+    # 验证
+    if sysctl net.ipv4.tcp_congestion_control | grep -q bbr; then
+        log_info "BBR 启用成功"
+    else
+        log_warn "BBR 配置已写入，重启后生效"
+    fi
+}
+
+# ==============================================================================
 # Main Execution
 # ==============================================================================
 main() {
@@ -447,19 +485,25 @@ main() {
     install_antigravity
     install_cloudflared
     setup_git
+    enable_bbr
     
     log_section "部署完成!"
     echo ""
     log_info "部署摘要:"
     echo "  - 用户: ${NEW_USER} (密码: ${NEW_PASSWORD})"
-    echo "  - 桌面: XFCE + LightDM"
-    echo "  - xRDP: 127.0.0.1:3389 (使用 Cloudflare Tunnel 访问)"
-    echo "  - Chromium: via snap (已配置 xRDP 兼容修复)"
+    echo "  - 桌面: XFCE + LightDM (含截图工具)"
+    echo "  - xRDP: 已配置 (使用 Cloudflare Tunnel 访问)"
+    if [[ "$UBUNTU_VERSION" == "22.04" ]]; then
+        echo "  - Chromium: via Flatpak (命令: chromium-xrdp)"
+    else
+        echo "  - Chromium: via snap"
+    fi
     echo "  - Docker: 已安装"
     echo "  - Node.js: via nvm (v24)"
     echo "  - gemini-cli: 已安装"
     echo "  - Antigravity: 已安装"
     echo "  - cloudflared: 已安装"
+    echo "  - BBR: 已启用"
     echo ""
     log_warn "建议重启系统以确保所有配置生效: sudo reboot"
 }
