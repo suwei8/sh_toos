@@ -466,8 +466,10 @@ main() {
     # 检查 Ubuntu 版本
     if [[ -f /etc/os-release ]]; then
         source /etc/os-release
-        if [[ "${VERSION_ID:-}" != "20.04" ]]; then
-            log_warn "当前 Ubuntu 版本为 ${VERSION_ID:-unknown}，此脚本针对 20.04 优化"
+        if [[ "${VERSION_ID:-}" != "20.04" && "${VERSION_ID:-}" != "22.04" ]]; then
+            log_warn "当前 Ubuntu 版本为 ${VERSION_ID:-unknown}，此脚本针对 20.04/22.04 优化"
+        else
+            log_info "检测到 Ubuntu ${VERSION_ID}，脚本将使用相应配置"
         fi
     fi
     
