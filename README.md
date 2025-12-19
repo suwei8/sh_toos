@@ -53,3 +53,42 @@ curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/main/uninstall_gh_ru
 ```bash
 curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/main/install_gh_runner.sh -o install_gh_runner.sh && chmod +x install_gh_runner.sh && sudo ./install_gh_runner.sh
 ```
+
+---
+
+## Remote Dev Environment Setup (ARM64)
+
+全自动远程开发环境部署脚本，适用于 Oracle Cloud VM.Standard.A1.Flex (ARM64) + Ubuntu 20.04 系统。
+
+### 功能特点
+
+一键部署完整的远程开发环境，包括：
+- **用户配置**: 创建用户 `sw`，配置免密 sudo
+- **中文支持**: 安装中文语言包和字体
+- **桌面环境**: XFCE + LightDM 最小化桌面
+- **远程访问**: xRDP（含 Chromium snap 兼容修复）
+- **浏览器**: Chromium (via snap，ARM64 兼容)
+- **开发工具**: Docker + Compose, Node.js (via nvm v24)
+- **AI 工具**: gemini-cli, Google Antigravity
+- **网络工具**: cloudflared (Cloudflare Tunnel)
+- **版本控制**: Git 配置 + SSH 密钥生成
+
+### 安装方法
+
+**一键安装 (推荐)**
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/setup_remote_dev_env.sh?v=$(date +%s)" -o setup_remote_dev_env.sh && chmod +x setup_remote_dev_env.sh && sudo ./setup_remote_dev_env.sh
+```
+
+### 重要说明
+
+> ⚠️ **Chromium 兼容性**: 脚本已包含 xRDP 会话中 Chromium snap 正常启动所需的 DBUS 环境变量修复。
+
+> ⚠️ **xRDP 端口**: 默认配置为 `127.0.0.1:3389`，请通过 Cloudflare Tunnel 进行远程访问。
+
+### 环境要求
+
+- **架构**: ARM64 (aarch64)
+- **系统**: Ubuntu 20.04 LTS
+- **权限**: root 或 sudo
