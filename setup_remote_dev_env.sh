@@ -254,7 +254,9 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
 npm install -g @google/gemini-cli
-gemini extensions install https://github.com/ChromeDevTools/chrome-devtools-mcp || true
+
+# 自动确认安装扩展（使用 yes 命令自动回答 Y）
+yes | gemini extensions install https://github.com/ChromeDevTools/chrome-devtools-mcp || true
 GEMINI_EOF
     
     log_info "gemini-cli 安装完成"
