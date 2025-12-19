@@ -77,7 +77,13 @@ install_desktop() {
     log_section "3. 安装 XFCE + LightDM 桌面环境"
     
     apt-get update -qq
-    apt-get install -y xfce4 xfce4-goodies lightdm lightdm-gtk-greeter
+    
+    # 预配置 lightdm 为默认显示管理器（避免交互式询问）
+    log_info "预配置 lightdm 为默认显示管理器..."
+    echo "lightdm shared/default-x-display-manager select lightdm" | debconf-set-selections
+    
+    # 使用非交互模式安装
+    DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies lightdm lightdm-gtk-greeter
     
     # 配置 LightDM 为默认显示管理器
     echo "/usr/sbin/lightdm" > /etc/X11/default-display-manager
