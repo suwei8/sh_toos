@@ -110,18 +110,12 @@ install_xrdp() {
     # 将 xrdp 用户添加到 ssl-cert 组
     usermod -aG ssl-cert xrdp
     
-    # 配置 xRDP 监听本地（用于 Cloudflare Tunnel）
-    # 只修改 [Globals] 部分的 port，不影响其他 section
-    log_info "配置 xRDP 监听 127.0.0.1:3389..."
-    awk '
-        /^\[Globals\]/ { in_globals=1 }
-        /^\[/ && !/^\[Globals\]/ { in_globals=0 }
-        in_globals && /^port=/ { print "port=tcp://.:3389"; next }
-        { print }
-    ' /etc/xrdp/xrdp.ini > /etc/xrdp/xrdp.ini.tmp && mv /etc/xrdp/xrdp.ini.tmp /etc/xrdp/xrdp.ini
+    # 注意: 保持默认端口配置 (port=3389)
+    # xRDP 默认监听 0.0.0.0:3389，通过 Cloudflare Tunnel 访问时安全
+    # 如需仅监听本地，可手动修改为 port=tcp://.:3389
     
-    # 关键修复: 修改 startwm.sh 以支持 Chromium snap
-    log_info "应用 Chromium snap 兼容性修复..."
+    # 关键修复: 修改 startwm.sh 以启动 XFCE 并支持 Chromium snap
+    log_info "配置 startwm.sh 启动 XFCE 桌面..."
     cat > /etc/xrdp/startwm.sh << 'STARTWM_EOF'
 #!/bin/sh
 if test -r /etc/profile; then . /etc/profile; fi
@@ -139,11 +133,23 @@ startxfce4
 STARTWM_EOF
     chmod +x /etc/xrdp/startwm.sh
     
+    # 禁用 polkit 颜色管理设备认证弹窗
+    # "Authentication is required to create a color managed device"
+    log_info "禁用颜色管理设备认证弹窗..."
+    cat > /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla << 'POLKIT_EOF'
+[Allow Colord all Users]
+Identity=unix-user:*
+Action=org.freedesktop.color-manager.create-device;org.freedesktop.color-manager.create-profile;org.freedesktop.color-manager.delete-device;org.freedesktop.color-manager.delete-profile;org.freedesktop.color-manager.modify-device;org.freedesktop.color-manager.modify-profile
+ResultAny=no
+ResultInactive=no
+ResultActive=yes
+POLKIT_EOF
+    
     # 启用并启动 xRDP 服务
     systemctl enable xrdp
     systemctl restart xrdp
     
-    log_info "xRDP 安装并配置完成（监听 127.0.0.1:3389）"
+    log_info "xRDP 安装并配置完成"
 }
 
 # ==============================================================================
