@@ -97,6 +97,13 @@ install_desktop() {
     # 配置 LightDM 为默认显示管理器
     echo "/usr/sbin/lightdm" > /etc/X11/default-display-manager
     
+    # 设置 xfce4-terminal 为默认终端模拟器
+    # (避免 x-terminal-emulator 指向 gnome-terminal 导致 "Input/output error")
+    if [ -f /usr/bin/xfce4-terminal.wrapper ]; then
+        update-alternatives --set x-terminal-emulator /usr/bin/xfce4-terminal.wrapper
+        log_info "已设置 xfce4-terminal 为默认终端"
+    fi
+    
     # 为用户配置默认 XFCE 会话
     USER_HOME="/home/${NEW_USER}"
     mkdir -p "${USER_HOME}/.config"
