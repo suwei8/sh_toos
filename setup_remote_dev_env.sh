@@ -92,7 +92,7 @@ install_desktop() {
     echo "lightdm shared/default-x-display-manager select lightdm" | debconf-set-selections
     
     # 使用非交互模式安装
-    DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies xfce4-screenshooter lightdm lightdm-gtk-greeter
+    DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies xfce4-terminal xfce4-screenshooter lightdm lightdm-gtk-greeter
     
     # 配置 LightDM 为默认显示管理器
     echo "/usr/sbin/lightdm" > /etc/X11/default-display-manager
