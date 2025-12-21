@@ -92,3 +92,30 @@ curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/setup_remote_d
 - **架构**: ARM64 (aarch64)
 - **系统**: Ubuntu 20.04 LTS
 - **权限**: root 或 sudo
+
+---
+
+## Restrict SSH to Localhost
+
+限制 SSH 服务只监听本地端口（127.0.0.1），阻止外部直接访问，只允许通过 Cloudflare Tunnel 连接。
+
+### 功能特点
+
+- **安全增强**: SSH 仅监听 `127.0.0.1`，外部无法直接连接
+- **自动检测**: 检查配置是否已存在，避免重复添加
+- **多发行版兼容**: 支持 Ubuntu (ssh) 和 CentOS/RHEL (sshd) 服务名称
+- **自动验证**: 执行后自动显示监听端口状态
+
+### 安装方法
+
+**一键执行 (推荐)**
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/restrict_ssh_localhost.sh?v=$(date +%s)" -o restrict_ssh_localhost.sh && chmod +x restrict_ssh_localhost.sh && sudo ./restrict_ssh_localhost.sh
+```
+
+### 重要说明
+
+> ⚠️ **警告**: 执行此脚本后，外部 SSH 连接将被阻止！请确保 Cloudflare Tunnel 已正确配置并测试通过后再执行。
+
+> 💡 **工作原理**: 脚本在 `/etc/ssh/sshd_config` 中添加 `ListenAddress 127.0.0.1`，使 SSH 服务仅监听本地回环地址。
