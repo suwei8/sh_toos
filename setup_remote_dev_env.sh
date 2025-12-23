@@ -235,6 +235,18 @@ export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/
 EOF
     fi
     
+    # 注册默认浏览器 alternatives
+    log_info "设置 Flatpak Chromium 为默认浏览器..."
+    update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/local/bin/chromium-xrdp 200
+    update-alternatives --set x-www-browser /usr/local/bin/chromium-xrdp
+    update-alternatives --install /usr/bin/gnome-www-browser gnome-www-browser /usr/local/bin/chromium-xrdp 200
+    update-alternatives --set gnome-www-browser /usr/local/bin/chromium-xrdp
+    
+    # 更新桌面数据库
+    if command -v update-desktop-database &>/dev/null; then
+        update-desktop-database /var/lib/flatpak/exports/share/applications || true
+    fi
+    
     log_info "Chromium (Flatpak) 安装完成"
     log_info "在 xRDP 中使用命令: chromium-xrdp"
 }
