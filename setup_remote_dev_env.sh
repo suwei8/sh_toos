@@ -207,7 +207,24 @@ install_chromium_snap() {
         snap install chromium
     fi
     
+    # 创建 chromium-snap 启动脚本
+    log_info "创建 Chromium 启动脚本..."
+    cat > /usr/local/bin/chromium-snap << 'EOF'
+#!/bin/bash
+# Chromium wrapper for snap on Ubuntu 20.04
+exec /snap/bin/chromium "$@"
+EOF
+    chmod +x /usr/local/bin/chromium-snap
+    
+    # 注册默认浏览器 alternatives (与 22.04 Flatpak 版本行为一致)
+    log_info "设置 Snap Chromium 为默认浏览器..."
+    update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/local/bin/chromium-snap 200
+    update-alternatives --set x-www-browser /usr/local/bin/chromium-snap
+    update-alternatives --install /usr/bin/gnome-www-browser gnome-www-browser /usr/local/bin/chromium-snap 200
+    update-alternatives --set gnome-www-browser /usr/local/bin/chromium-snap
+    
     log_info "Chromium (snap) 安装完成"
+    log_info "在 xRDP 中使用命令: chromium-snap 或从 XFCE 菜单启动"
 }
 
 # Chromium via Flatpak (Ubuntu 22.04)
