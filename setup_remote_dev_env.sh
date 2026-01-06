@@ -70,13 +70,40 @@ install_chinese_language() {
     log_section "2. 安装中文语言包"
     
     apt-get update -qq
-    apt-get install -y language-pack-zh-hans fonts-noto-cjk fonts-noto-cjk-extra
+    # 安装 locales 包以确保 locale-gen 可用
+    apt-get install -y locales language-pack-zh-hans fonts-noto-cjk fonts-noto-cjk-extra
     
-    # 更新 locale
-    locale-gen zh_CN.UTF-8
-    update-locale LANG=en_US.UTF-8
+    # 生成 locale (确保 en_US 和 zh_CN 都存在)
+    log_info "生成 Locales..."
+    locale-gen en_US.UTF-8 zh_CN.UTF-8
     
-    log_info "中文语言包安装完成"
+    # 配置系统默认 locale
+    # 强制设置为 zh_CN.UTF-8 以确保终端默认使用 UTF-8 编码，解决乱码问题
+    log_info "设置系统默认 Locale 为 zh_CN.UTF-8..."
+    update-locale LANG=zh_CN.UTF-8 LC_ALL=zh_CN.UTF-8 LANGUAGE=zh_CN:en_US
+    
+    # 强制配置用户环境变量 (写入 .bashrc 和 .profile)
+    # 这能解决 xfce4-terminal 默认检测为 ANSI_X3.4-1968 的问题
+    USER_HOME="/home/${NEW_USER}"
+    if [[ -d "${USER_HOME}" ]]; then
+        log_info "配置用户 ${NEW_USER} 的 Shell Locale..."
+        
+        LOCALE_CONFIG="
+# Force Locale to UTF-8 for Terminal Compatibility
+export LANG=zh_CN.UTF-8
+export LC_ALL=zh_CN.UTF-8
+export LANGUAGE=zh_CN:en_US
+"
+        # 追加到 .bashrc
+        echo "$LOCALE_CONFIG" >> "${USER_HOME}/.bashrc"
+        
+        # 追加到 .profile
+        echo "$LOCALE_CONFIG" >> "${USER_HOME}/.profile"
+        
+        chown "${NEW_USER}:${NEW_USER}" "${USER_HOME}/.bashrc" "${USER_HOME}/.profile"
+    fi
+    
+    log_info "中文语言包安装完成 (已强制设置 zh_CN.UTF-8)"
 }
 
 # ==============================================================================
@@ -106,10 +133,19 @@ install_desktop() {
     
     # 为用户配置默认 XFCE 会话
     USER_HOME="/home/${NEW_USER}"
-    mkdir -p "${USER_HOME}/.config"
+    mkdir -p "${USER_HOME}/.config/xfce4/terminal"
+    
+    # Pre-configure xfce4-terminal to use UTF-8
+    # 解决终端中文乱码问题 (Explicitly set encoding)
+    cat > "${USER_HOME}/.config/xfce4/terminal/terminalrc" << 'TERM_EOF'
+[Configuration]
+Encoding=UTF-8
+TERM_EOF
+
     echo "[Desktop]
 Session=xfce
 " > "${USER_HOME}/.dmrc"
+    
     chown -R "${NEW_USER}:${NEW_USER}" "${USER_HOME}/.config" "${USER_HOME}/.dmrc"
     
     log_info "XFCE + LightDM 桌面环境安装完成"
@@ -388,10 +424,30 @@ install_antigravity() {
 }
 
 # ==============================================================================
-# 10. 安装 cloudflared
+# 10. 安装 Codex CLI
+# ==============================================================================
+install_codex_cli() {
+    log_section "10. 安装 Codex CLI"
+    
+    # 以指定用户身份安装
+    sudo -u "${NEW_USER}" bash << 'CODEX_EOF'
+set -e
+export HOME="/home/sw"
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+npm i -g @openai/codex
+npm i -g @openai/codex@latest
+CODEX_EOF
+    
+    log_info "Codex CLI 安装完成"
+}
+
+# ==============================================================================
+# 11. 安装 cloudflared
 # ==============================================================================
 install_cloudflared() {
-    log_section "10. 安装 cloudflared"
+    log_section "11. 安装 cloudflared"
     
     # 添加 Cloudflare GPG 密钥
     mkdir -p --mode=0755 /usr/share/keyrings
@@ -411,10 +467,10 @@ install_cloudflared() {
 }
 
 # ==============================================================================
-# 11. 配置 Git 和生成 SSH 密钥
+# 12. 配置 Git 和生成 SSH 密钥
 # ==============================================================================
 setup_git() {
-    log_section "11. 配置 Git 和生成 SSH 密钥"
+    log_section "12. 配置 Git 和生成 SSH 密钥"
     
     USER_HOME="/home/${NEW_USER}"
     
@@ -446,10 +502,10 @@ GIT_EOF
 }
 
 # ==============================================================================
-# 12. 启用 BBR TCP 拥塞控制
+# 13. 启用 BBR TCP 拥塞控制
 # ==============================================================================
 enable_bbr() {
-    log_section "12. 启用 BBR TCP 拥塞控制"
+    log_section "13. 启用 BBR TCP 拥塞控制"
     
     # 检查内核是否支持 BBR
     if ! modprobe tcp_bbr &>/dev/null; then
@@ -521,6 +577,7 @@ main() {
     install_nodejs
     install_gemini_cli
     install_antigravity
+    install_codex_cli
     install_cloudflared
     setup_git
     enable_bbr
@@ -540,6 +597,7 @@ main() {
     echo "  - Node.js: via nvm (v24)"
     echo "  - gemini-cli: 已安装"
     echo "  - Antigravity: 已安装"
+    echo "  - Codex CLI: 已安装"
     echo "  - cloudflared: 已安装"
     echo "  - BBR: 已启用"
     echo ""

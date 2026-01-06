@@ -69,7 +69,7 @@ curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/main/install_gh_runn
 - **远程访问**: xRDP（含 Chromium snap 兼容修复）
 - **浏览器**: Chromium (via snap，ARM64 兼容)
 - **开发工具**: Docker + Compose, Node.js (via nvm v24)
-- **AI 工具**: gemini-cli, Google Antigravity
+- **AI 工具**: gemini-cli, Google Antigravity, Codex CLI
 - **网络工具**: cloudflared (Cloudflare Tunnel)
 - **版本控制**: Git 配置 + SSH 密钥生成
 
@@ -119,3 +119,20 @@ curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/restrict_ssh_l
 > ⚠️ **警告**: 执行此脚本后，外部 SSH 连接将被阻止！请确保 Cloudflare Tunnel 已正确配置并测试通过后再执行。
 
 > 💡 **工作原理**: 脚本在 `/etc/ssh/sshd_config` 中添加 `ListenAddress 127.0.0.1`，使 SSH 服务仅监听本地回环地址。
+
+---
+
+## Repair Terminal Encoding
+
+如果您的终端出现中文乱码（尤其是在 xRDP 环境下），请运行此修复脚本。
+
+### 功能特点
+
+- **强制 UTF-8**: 配置系统 Locale 和 xfce4-terminal 强制使用 UTF-8 编码。
+- **一键修复**: 自动生成 Locales 并更新用户配置文件。
+
+### 使用方法
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/repair_terminal_encoding.sh?v=$(date +%s)" -o repair.sh && sudo bash repair.sh
+```
