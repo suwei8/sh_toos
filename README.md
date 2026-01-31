@@ -136,3 +136,21 @@ curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/restrict_ssh_l
 ```bash
 curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/repair_terminal_encoding.sh?v=$(date +%s)" -o repair.sh && sudo bash repair.sh
 ```
+
+---
+
+## Fix Terminal Crash
+
+如果您的终端无法打开并提示 "Failed to execute default Terminal Emulator" (Input/output error)，请运行此修复脚本。
+
+### 功能特点
+
+- **修复 Alternatives**: 强制将 `x-terminal-emulator` 指向 `xfce4-terminal.wrapper`，解决 `gnome-terminal` 在 xRDP 下崩溃的问题。
+- **重置配置**: 重置 xfce4-terminal 配置文件，防止因配置错误导致的崩溃。
+- **修复 Locale**: 重新生成 Locale 并设置安全的默认值。
+
+### 使用方法
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/fix_terminal_crash.sh?v=$(date +%s)" -o fix_crash.sh && sudo bash fix_crash.sh
+```
