@@ -58,9 +58,16 @@ update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 LANGUAGE=en_US:en
 log_info "Locales regenerated and system default set to en_US.UTF-8."
 
 # ==============================================================================
-# 2. Fix Terminal Alternative
+# 2. Fix Terminal Alternative & Dependencies
 # ==============================================================================
-log_info "2. Fixing Terminal Emulator Alternatives..."
+log_info "2. Fixing Dependencies & Terminal Emulator Alternatives..."
+
+# Ensure crucial dependencies are installed
+log_info "Checking for dbus-x11 (required for xRDP sessions)..."
+if ! dpkg -l | grep -q dbus-x11; then
+    log_warn "dbus-x11 not found. Installing..."
+    apt-get update -qq && apt-get install -y dbus-x11
+fi
 
 # Force x-terminal-emulator to xfce4-terminal.wrapper
 # gnome-terminal often causes I/O errors in xRDP
@@ -80,11 +87,20 @@ else
     
     if [ -f /usr/bin/xfce4-terminal.wrapper ]; then
         update-alternatives --set x-terminal-emulator /usr/bin/xfce4-terminal.wrapper
-        log_info "Installed xfce4-terminal and set alternative."
+        log_info "Installed xfce4-terminal and set alternative to wrapper."
+    elif [ -f /usr/bin/xfce4-terminal ]; then
+         # Fallback if wrapper missing after install
+         update-alternatives --install /usr/bin/x-terminal-emulator x-terminal-emulator /usr/bin/xfce4-terminal 50
+         update-alternatives --set x-terminal-emulator /usr/bin/xfce4-terminal
+         log_info "Installed xfce4-terminal and set alternative to binary."
     else
-        log_err "Failed to install xfce4-terminal. Please install it manually."
+        log_err "Failed to install xfce4-terminal. Please check internet connection."
     fi
 fi
+
+# Double check the result
+CURRENT_ALT=$(update-alternatives --query x-terminal-emulator | grep 'Value:' | awk '{print $2}')
+log_info "Current x-terminal-emulator points to: $CURRENT_ALT"
 
 # ==============================================================================
 # 3. Reset User Terminal Config
