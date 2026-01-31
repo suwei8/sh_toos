@@ -154,3 +154,20 @@ curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/repair_termina
 ```bash
 curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/fix_terminal_crash.sh?v=$(date +%s)" -o fix_crash.sh && sudo bash fix_crash.sh
 ```
+
+---
+
+## Fix Chromium Snap (Ubuntu 20.04)
+
+如果您的 Chromium 在远程桌面中无法打开（点击无反应或报错），请运行此修复脚本。
+
+### 功能特点
+
+- **修复 startwm.sh**: 添加 `xhost` 授权和环境变量清理，解决 Snap 应用无法连接 X Server 的问题。
+- **创建 Wrapper**: 创建 `chromium-snap` 启动脚本作为备用启动方式。
+
+### 使用方法
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/fix_chromium_snap.sh?v=$(date +%s)" -o fix_snap.sh && sudo bash fix_snap.sh
+```
