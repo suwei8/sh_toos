@@ -75,7 +75,15 @@ elif [ -f /usr/bin/xfce4-terminal ]; then
     update-alternatives --set x-terminal-emulator /usr/bin/xfce4-terminal
     log_info "Set x-terminal-emulator to xfce4-terminal binary"
 else
-    log_warn "xfce4-terminal not found. Is XFCE installed?"
+    log_warn "xfce4-terminal not found. Attempting to install..."
+    apt-get update -qq && apt-get install -y xfce4-terminal
+    
+    if [ -f /usr/bin/xfce4-terminal.wrapper ]; then
+        update-alternatives --set x-terminal-emulator /usr/bin/xfce4-terminal.wrapper
+        log_info "Installed xfce4-terminal and set alternative."
+    else
+        log_err "Failed to install xfce4-terminal. Please install it manually."
+    fi
 fi
 
 # ==============================================================================
