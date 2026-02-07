@@ -157,7 +157,8 @@ Session=xfce
 install_xrdp() {
     log_section "4. 安装并配置 xRDP"
     
-    apt-get install -y xrdp xorgxrdp
+    # dbus-x11 在 Ubuntu 24.04 上是必需的，否则 xRDP 登录时会报 "dbus-launch" 找不到
+    apt-get install -y xrdp xorgxrdp dbus-x11
     
     # 将 xrdp 用户添加到 ssl-cert 组
     usermod -aG ssl-cert xrdp
