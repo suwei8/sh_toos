@@ -33,12 +33,24 @@ else
     fi
 fi
 
+# Ubuntu 24.04+ 使用 systemd socket activation，会覆盖 sshd_config 的 ListenAddress
+# 必须禁用 ssh.socket 才能让 ListenAddress 配置生效
+echo "[+] 检查 systemd socket activation..."
+if systemctl is-active ssh.socket &>/dev/null; then
+    echo "[+] 检测到 ssh.socket (Ubuntu 24.04+)，正在禁用..."
+    sudo systemctl stop ssh.socket
+    sudo systemctl disable ssh.socket
+    echo "[+] ssh.socket 已禁用"
+fi
+
 echo "[+] 重启 SSH 服务..."
 # 兼容不同系统的 SSH 服务名称 (ssh 或 sshd)
 if systemctl list-units --type=service --all | grep -q "ssh.service"; then
-    sudo systemctl restart ssh
+    sudo systemctl enable ssh.service
+    sudo systemctl restart ssh.service
     echo "[+] 已重启 ssh.service"
 elif systemctl list-units --type=service --all | grep -q "sshd.service"; then
+    sudo systemctl enable sshd.service
     sudo systemctl restart sshd
     echo "[+] 已重启 sshd.service"
 else
