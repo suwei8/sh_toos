@@ -2,7 +2,7 @@
 # ==============================================================================
 # 全自动远程开发环境部署脚本
 # 适用于: Oracle Cloud VM.Standard.A1.Flex (ARM64)
-# 支持: Ubuntu 20.04 LTS / Ubuntu 22.04 LTS
+# 支持: Ubuntu 20.04 LTS / Ubuntu 22.04 LTS / Ubuntu 24.04 LTS
 # ==============================================================================
 set -euo pipefail
 
@@ -188,7 +188,27 @@ STARTWM_EOF
     # 禁用 polkit 颜色管理设备认证弹窗
     # "Authentication is required to create a color managed device"
     log_info "禁用颜色管理设备认证弹窗..."
-    cat > /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla << 'POLKIT_EOF'
+    
+    # Ubuntu 24.04+ 使用新的 JavaScript rules 格式
+    if [[ "$UBUNTU_VERSION" == "24.04" ]] || [[ "${UBUNTU_VERSION%%.*}" -ge 24 ]]; then
+        mkdir -p /etc/polkit-1/rules.d
+        cat > /etc/polkit-1/rules.d/45-allow-colord.rules << 'POLKIT_EOF'
+polkit.addRule(function(action, subject) {
+    if ((action.id == "org.freedesktop.color-manager.create-device" ||
+         action.id == "org.freedesktop.color-manager.create-profile" ||
+         action.id == "org.freedesktop.color-manager.delete-device" ||
+         action.id == "org.freedesktop.color-manager.delete-profile" ||
+         action.id == "org.freedesktop.color-manager.modify-device" ||
+         action.id == "org.freedesktop.color-manager.modify-profile") &&
+        subject.isInGroup("users")) {
+        return polkit.Result.YES;
+    }
+});
+POLKIT_EOF
+    else
+        # Ubuntu 20.04/22.04 使用旧的 pkla 格式
+        mkdir -p /etc/polkit-1/localauthority/50-local.d
+        cat > /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla << 'POLKIT_EOF'
 [Allow Colord all Users]
 Identity=unix-user:*
 Action=org.freedesktop.color-manager.create-device;org.freedesktop.color-manager.create-profile;org.freedesktop.color-manager.delete-device;org.freedesktop.color-manager.delete-profile;org.freedesktop.color-manager.modify-device;org.freedesktop.color-manager.modify-profile
@@ -196,6 +216,7 @@ ResultAny=no
 ResultInactive=no
 ResultActive=yes
 POLKIT_EOF
+    fi
     
     # 启用并启动 xRDP 服务
     systemctl enable xrdp
@@ -215,13 +236,13 @@ install_chromium() {
     if [[ "$UBUNTU_VERSION" == "20.04" ]]; then
         log_info "Ubuntu 20.04 检测到，使用 snap 安装 Chromium..."
         install_chromium_snap
-    elif [[ "$UBUNTU_VERSION" == "22.04" ]]; then
-        log_info "Ubuntu 22.04 检测到，使用 Flatpak 安装 Chromium..."
+    elif [[ "$UBUNTU_VERSION" == "22.04" || "$UBUNTU_VERSION" == "24.04" ]]; then
+        log_info "Ubuntu ${UBUNTU_VERSION} 检测到，使用 Flatpak 安装 Chromium..."
         log_info "(snap 版本在 xRDP 中有 cgroup 兼容性问题)"
         install_chromium_flatpak
     else
-        log_warn "未知 Ubuntu 版本 ($UBUNTU_VERSION)，尝试使用 snap 安装..."
-        install_chromium_snap
+        log_warn "未知 Ubuntu 版本 ($UBUNTU_VERSION)，尝试使用 Flatpak 安装..."
+        install_chromium_flatpak
     fi
 }
 
@@ -322,11 +343,20 @@ install_docker() {
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
     chmod a+r /etc/apt/keyrings/docker.asc
     
+    # 动态检测 Ubuntu codename
+    case "$UBUNTU_VERSION" in
+        20.04) DOCKER_CODENAME="focal" ;;
+        22.04) DOCKER_CODENAME="jammy" ;;
+        24.04) DOCKER_CODENAME="noble" ;;
+        *) DOCKER_CODENAME=$(lsb_release -cs 2>/dev/null || echo "jammy") ;;
+    esac
+    log_info "使用 Docker 仓库 codename: $DOCKER_CODENAME"
+    
     # 添加仓库
-    tee /etc/apt/sources.list.d/docker.sources << 'DOCKER_EOF'
+    tee /etc/apt/sources.list.d/docker.sources << DOCKER_EOF
 Types: deb
 URIs: https://download.docker.com/linux/ubuntu
-Suites: focal
+Suites: $DOCKER_CODENAME
 Components: stable
 Signed-By: /etc/apt/keyrings/docker.asc
 DOCKER_EOF
@@ -558,8 +588,8 @@ main() {
     # 检查 Ubuntu 版本
     if [[ -f /etc/os-release ]]; then
         source /etc/os-release
-        if [[ "${VERSION_ID:-}" != "20.04" && "${VERSION_ID:-}" != "22.04" ]]; then
-            log_warn "当前 Ubuntu 版本为 ${VERSION_ID:-unknown}，此脚本针对 20.04/22.04 优化"
+        if [[ "${VERSION_ID:-}" != "20.04" && "${VERSION_ID:-}" != "22.04" && "${VERSION_ID:-}" != "24.04" ]]; then
+            log_warn "当前 Ubuntu 版本为 ${VERSION_ID:-unknown}，此脚本针对 20.04/22.04/24.04 优化"
         else
             log_info "检测到 Ubuntu ${VERSION_ID}，脚本将使用相应配置"
         fi
