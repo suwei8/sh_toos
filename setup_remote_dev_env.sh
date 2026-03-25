@@ -227,103 +227,62 @@ POLKIT_EOF
 }
 
 # ==============================================================================
-# 5. 安装 Chromium 浏览器
-# Ubuntu 20.04: 使用 snap (在 xRDP 中可正常工作)
-# Ubuntu 22.04: 使用 Flatpak (snap 有 cgroup 兼容性问题)
+# 5. 安装 Chromium 浏览器 (原生/非沙盒版本，适用于自动化测试)
 # ==============================================================================
 install_chromium() {
-    log_section "5. 安装 Chromium 浏览器"
+    log_section "5. 安装 Chromium 浏览器 (原生非沙盒版本)"
     
-    if [[ "$UBUNTU_VERSION" == "20.04" ]]; then
-        log_info "Ubuntu 20.04 检测到，使用 snap 安装 Chromium..."
-        install_chromium_snap
-    elif [[ "$UBUNTU_VERSION" == "22.04" || "$UBUNTU_VERSION" == "24.04" ]]; then
-        log_info "Ubuntu ${UBUNTU_VERSION} 检测到，使用 Flatpak 安装 Chromium..."
-        log_info "(snap 版本在 xRDP 中有 cgroup 兼容性问题)"
-        install_chromium_flatpak
-    else
-        log_warn "未知 Ubuntu 版本 ($UBUNTU_VERSION)，尝试使用 Flatpak 安装..."
-        install_chromium_flatpak
+    # 清理可能存在的受限制的 Snap/Flatpak 版本
+    log_info "清理系统可能带有的 Snap/Flatpak Chromium..."
+    if command -v snap &>/dev/null; then
+        snap remove chromium || true
     fi
-}
+    if command -v flatpak &>/dev/null; then
+        flatpak uninstall -y org.chromium.Chromium || true
+    fi
+    rm -f /usr/local/bin/chromium-snap /usr/local/bin/chromium-xrdp
 
-# Chromium via Snap (Ubuntu 20.04)
-install_chromium_snap() {
-    # 确保 snapd 已安装并运行
-    if ! command -v snap &>/dev/null; then
-        apt-get install -y snapd
-        systemctl enable snapd
-        systemctl start snapd
-        sleep 5  # 等待 snapd 初始化
-    fi
-    
-    # 安装 Chromium snap
-    if snap list chromium &>/dev/null; then
-        log_warn "Chromium snap 已安装"
-        snap refresh chromium
-    else
-        snap install chromium
-    fi
-    
-    # 创建 chromium-snap 启动脚本
-    log_info "创建 Chromium 启动脚本..."
-    cat > /usr/local/bin/chromium-snap << 'EOF'
-#!/bin/bash
-# Chromium wrapper for snap on Ubuntu 20.04
-exec /snap/bin/chromium "$@"
-EOF
-    chmod +x /usr/local/bin/chromium-snap
-    
-    # 注册默认浏览器 alternatives (与 22.04 Flatpak 版本行为一致)
-    log_info "设置 Snap Chromium 为默认浏览器..."
-    update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/local/bin/chromium-snap 200
-    update-alternatives --set x-www-browser /usr/local/bin/chromium-snap
-    update-alternatives --install /usr/bin/gnome-www-browser gnome-www-browser /usr/local/bin/chromium-snap 200
-    update-alternatives --set gnome-www-browser /usr/local/bin/chromium-snap
-    
-    log_info "Chromium (snap) 安装完成"
-    log_info "在 xRDP 中使用命令: chromium-snap 或从 XFCE 菜单启动"
-}
+    ARCH=$(uname -m)
+    if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
+        log_info "ARM64 架构检测到，使用 Playwright 下载原生 Chromium..."
+        # 需要以指定用户身份运行 nvm 和 playwright
+        sudo -u "${NEW_USER}" bash << 'PLAYWRIGHT_EOF'
+set -e
+export HOME="/home/sw"
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-# Chromium via Flatpak (Ubuntu 22.04)
-install_chromium_flatpak() {
-    # 安装 Flatpak
-    apt-get install -y flatpak
-    flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-    
-    # 安装 Chromium
-    flatpak install -y flathub org.chromium.Chromium
-    
-    # 创建 chromium-xrdp 启动脚本
-    cat > /usr/local/bin/chromium-xrdp << 'EOF'
-#!/bin/bash
-# Chromium wrapper for xRDP sessions on Ubuntu 22.04
-exec flatpak run org.chromium.Chromium "$@"
-EOF
-    chmod +x /usr/local/bin/chromium-xrdp
-    
-    # 修复 XDG_DATA_DIRS 以便 Flatpak 应用出现在菜单中
-    if ! grep -q 'flatpak/exports/share' /etc/profile.d/flatpak.sh 2>/dev/null; then
-        cat > /etc/profile.d/flatpak.sh << 'EOF'
-# Flatpak XDG_DATA_DIRS fix
-export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
-EOF
+mkdir -p "$HOME/playwright-system-browser"
+cd "$HOME/playwright-system-browser"
+npm init -y >/dev/null 2>&1
+npm install playwright >/dev/null 2>&1
+npx playwright install chromium
+PLAYWRIGHT_EOF
+
+        # 寻找并全局软链接
+        CHROME_BIN=$(find /home/${NEW_USER}/.cache/ms-playwright -name "chrome" -type f | grep "chrome-linux/chrome" | head -n 1)
+        if [ -n "$CHROME_BIN" ]; then
+            ln -sf "$CHROME_BIN" /usr/local/bin/google-chrome
+            ln -sf "$CHROME_BIN" /usr/local/bin/chromium-browser
+            ln -sf "$CHROME_BIN" /usr/local/bin/chromium
+            log_info "Chromium (ARM64 Playwright build) 软链接配置完成"
+        else
+            log_err "未找到 Playwright 下载的 Chromium 二进制文件！"
+        fi
+
+    else
+        log_info "AMD64/x86_64 架构检测到，使用官方 Google Chrome APT 源安装..."
+        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg
+        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | tee /etc/apt/sources.list.d/google-chrome.list
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y google-chrome-stable
+        
+        # 创建 wrapper 软链接，防止某些工具硬编码
+        ln -sf /usr/bin/google-chrome-stable /usr/local/bin/chromium-browser
+        ln -sf /usr/bin/google-chrome-stable /usr/local/bin/chromium
+        
+        log_info "Google Chrome (AMD64 APT build) 安装完成"
     fi
-    
-    # 注册默认浏览器 alternatives
-    log_info "设置 Flatpak Chromium 为默认浏览器..."
-    update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/local/bin/chromium-xrdp 200
-    update-alternatives --set x-www-browser /usr/local/bin/chromium-xrdp
-    update-alternatives --install /usr/bin/gnome-www-browser gnome-www-browser /usr/local/bin/chromium-xrdp 200
-    update-alternatives --set gnome-www-browser /usr/local/bin/chromium-xrdp
-    
-    # 更新桌面数据库
-    if command -v update-desktop-database &>/dev/null; then
-        update-desktop-database /var/lib/flatpak/exports/share/applications || true
-    fi
-    
-    log_info "Chromium (Flatpak) 安装完成"
-    log_info "在 xRDP 中使用命令: chromium-xrdp"
 }
 
 # ==============================================================================
@@ -603,9 +562,9 @@ main() {
     install_chinese_language
     install_desktop
     install_xrdp
-    install_chromium
     install_docker
     install_nodejs
+    install_chromium
     install_gemini_cli
     install_antigravity
     install_codex_cli
@@ -619,11 +578,7 @@ main() {
     echo "  - 用户: ${NEW_USER} (密码: ${NEW_PASSWORD})"
     echo "  - 桌面: XFCE + LightDM (含截图工具)"
     echo "  - xRDP: 已配置 (使用 Cloudflare Tunnel 访问)"
-    if [[ "$UBUNTU_VERSION" == "22.04" ]]; then
-        echo "  - Chromium: via Flatpak (命令: chromium-xrdp)"
-    else
-        echo "  - Chromium: via snap"
-    fi
+    echo "  - Browser: Native Chrome/Chromium (无沙盒，支持自动化)"
     echo "  - Docker: 已安装"
     echo "  - Node.js: via nvm (v24)"
     echo "  - gemini-cli: 已安装"
