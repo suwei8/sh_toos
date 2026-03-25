@@ -171,3 +171,23 @@ curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/fix_terminal_c
 ```bash
 curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/fix_chromium_snap.sh?v=$(date +%s)" -o fix_snap.sh && sudo bash fix_snap.sh
 ```
+
+---
+
+## Fix Browser Automation (Snap/Flatpak Removal)
+
+如果您的系统内由于预装的 Chromium 在自动化测试或脚本（如 Puppeteer、Playwright 截图爬虫）中由于沙盒权限受阻，频繁遇到 Timeout 超时等环境异常，请运行此终极修复脚本。
+
+### 功能特点
+
+- **清洗沙盒限制**: 干净移出环境中会导致 IPC/配置写异常的 Snap 和 Flatpak 版 Chromium。
+- **配置原生内核**: 
+  - 对于 **ARM64**：自动通过 npm 获取专属的 Playwright 原生无沙盒版 Chromium 引擎。
+  - 对于 **AMD64**：自动配置官方 APT 源并为您安装正式版 Google Chrome。
+- **全局兼容适配**: 补全所有的替代软连接名，无论您的业务脚本默认调用什么名字都能精准映射。
+
+### 使用方法
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/fix_browser_automation.sh?v=$(date +%s)" -o fix_browser.sh && sudo bash fix_browser.sh
+```
