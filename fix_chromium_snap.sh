@@ -23,41 +23,52 @@ fi
 
 log_info "Starting Chromium Snap Fix..."
 
-# 1. Fix startwm.sh
-# Ensure 'xhost +si:localuser:$(whoami)' is present
+# 1. Rewrite startwm.sh with a stable runtime-dir fix
 STARTWM="/etc/xrdp/startwm.sh"
 if [ -f "$STARTWM" ]; then
-    log_info "Checking $STARTWM..."
-    
-    if ! grep -q "xhost +si:localuser" "$STARTWM"; then
-        log_info "Adding 'xhost +si:localuser:\$(whoami)' to $STARTWM..."
-        # Insert before startxfce4
-        sed -i '/startxfce4/i xhost +si:localuser:$(whoami)' "$STARTWM"
-    else
-        log_info "'xhost +si:localuser' already present in $STARTWM"
+    log_info "Rewriting $STARTWM..."
+    cat > "$STARTWM" << 'EOF'
+#!/bin/sh
+if test -r /etc/profile; then . /etc/profile; fi
+if test -r /etc/default/locale; then . /etc/default/locale; fi
+
+uid="$(id -u)"
+gid="$(id -g)"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$uid}"
+
+if [ ! -d "$XDG_RUNTIME_DIR" ]; then
+    sudo install -d -m 700 -o "$uid" -g "$gid" "$XDG_RUNTIME_DIR"
+else
+    owner_uid="$(stat -c '%u' "$XDG_RUNTIME_DIR" 2>/dev/null || echo '')"
+    owner_gid="$(stat -c '%g' "$XDG_RUNTIME_DIR" 2>/dev/null || echo '')"
+    perms="$(stat -c '%a' "$XDG_RUNTIME_DIR" 2>/dev/null || echo '')"
+    if [ "$owner_uid" != "$uid" ] || [ "$owner_gid" != "$gid" ] || [ "$perms" != "700" ]; then
+        sudo chown "$uid:$gid" "$XDG_RUNTIME_DIR"
+        sudo chmod 700 "$XDG_RUNTIME_DIR"
     fi
-    
-    # Ensure unsets are present
-    if ! grep -q "unset DBUS_SESSION_BUS_ADDRESS" "$STARTWM"; then
-        sed -i '2i unset DBUS_SESSION_BUS_ADDRESS' "$STARTWM"
-    fi
-    if ! grep -q "unset XDG_RUNTIME_DIR" "$STARTWM"; then
-        sed -i '3i unset XDG_RUNTIME_DIR' "$STARTWM"
-    fi
+fi
+
+exec startxfce4
+EOF
+    chmod +x "$STARTWM"
 else
     log_err "$STARTWM not found!"
 fi
 
-# 2. Create Wrapper (Double safety)
+# 2. Create wrapper
 WRAPPER="/usr/local/bin/chromium-snap"
 log_info "Creating wrapper at $WRAPPER..."
 
 cat > "$WRAPPER" << 'EOF'
 #!/bin/bash
 # Chromium wrapper for snap on Ubuntu 20.04
-# This wrapper explicitly unsets variables even if startwm.sh missed it
-unset DBUS_SESSION_BUS_ADDRESS
-unset XDG_RUNTIME_DIR
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+if [[ ! -d "$XDG_RUNTIME_DIR" ]]; then
+    echo "XDG_RUNTIME_DIR does not exist: $XDG_RUNTIME_DIR" >&2
+    exit 1
+fi
+
 exec /snap/bin/chromium "$@"
 EOF
 chmod +x "$WRAPPER"
@@ -68,6 +79,20 @@ update-alternatives --install /usr/bin/x-www-browser x-www-browser "$WRAPPER" 20
 update-alternatives --set x-www-browser "$WRAPPER"
 update-alternatives --install /usr/bin/gnome-www-browser gnome-www-browser "$WRAPPER" 200
 update-alternatives --set gnome-www-browser "$WRAPPER"
+
+# 4. Override the desktop launcher for existing users
+if [ -f /var/lib/snapd/desktop/applications/chromium_chromium.desktop ]; then
+    for user_home in /home/*; do
+        [ -d "$user_home" ] || continue
+        user_name=$(basename "$user_home")
+        desktop_dir="$user_home/.local/share/applications"
+        install -d -m 755 -o "$user_name" -g "$user_name" "$desktop_dir"
+        sed 's#^Exec=/snap/bin/chromium#Exec=/usr/local/bin/chromium-snap#' \
+            /var/lib/snapd/desktop/applications/chromium_chromium.desktop \
+            > "$desktop_dir/chromium_chromium.desktop"
+        chown "$user_name:$user_name" "$desktop_dir/chromium_chromium.desktop"
+    done
+fi
 
 log_info "=========================================="
 log_info "Fix Complete!"
