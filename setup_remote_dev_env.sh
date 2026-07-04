@@ -298,6 +298,10 @@ install_docker() {
     apt-get update -qq
     apt-get install -y ca-certificates curl
     
+    # 清理可能存在的旧版 Docker 仓库配置（避免 Signed-By 冲突）
+    rm -f /etc/apt/sources.list.d/docker.list /etc/apt/sources.list.d/docker.sources
+    rm -f /usr/share/keyrings/docker-archive-keyring.gpg /etc/apt/keyrings/docker.gpg /etc/apt/keyrings/docker.asc
+    
     # 添加 Docker GPG 密钥
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
