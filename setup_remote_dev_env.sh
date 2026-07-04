@@ -517,6 +517,11 @@ main() {
     log_info "开始执行全自动远程开发环境部署..."
     log_info "目标用户: ${NEW_USER}"
     
+    # 早期清理：移除可能存在的旧版 Docker 仓库配置，避免 apt-get update
+    # 因 Signed-By 冲突而失败（必须在任何 apt-get update 之前执行）
+    rm -f /etc/apt/sources.list.d/docker.list /etc/apt/sources.list.d/docker.sources
+    rm -f /usr/share/keyrings/docker-archive-keyring.gpg /etc/apt/keyrings/docker.gpg /etc/apt/keyrings/docker.asc
+    
     setup_user
     install_chinese_language
     install_desktop
