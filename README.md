@@ -69,7 +69,7 @@ curl -fsSL https://raw.githubusercontent.com/suwei8/sh_toos/main/install_gh_runn
 - **远程访问**: xRDP（含 Chromium snap 兼容修复）
 - **浏览器**: Chromium (via snap，ARM64 兼容)
 - **开发工具**: Docker + Compose, Node.js (via nvm v24)
-- **AI 工具**: gemini-cli, Google Antigravity, Codex CLI
+- **AI 工具**: Codex CLI
 - **网络工具**: cloudflared (Cloudflare Tunnel)
 - **版本控制**: Git 配置 + SSH 密钥生成
 
@@ -163,8 +163,9 @@ curl -fsSL "https://raw.githubusercontent.com/suwei8/sh_toos/main/fix_terminal_c
 
 ### 功能特点
 
-- **修复 startwm.sh**: 添加 `xhost` 授权和环境变量清理，解决 Snap 应用无法连接 X Server 的问题。
+- **重写 startwm.sh**: 完整重写为稳定的 `XDG_RUNTIME_DIR` 修复版本，确保运行时目录存在且属主/权限正确，解决 Snap 应用无法连接 X Server 的问题。
 - **创建 Wrapper**: 创建 `chromium-snap` 启动脚本作为备用启动方式。
+- **覆盖桌面启动项**: 为所有现有用户覆盖 Chromium 桌面启动项，使 XFCE 菜单也走 wrapper。
 
 ### 使用方法
 
