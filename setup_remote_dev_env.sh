@@ -369,55 +369,10 @@ NVM_EOF
 }
 
 # ==============================================================================
-# 8. 安装 gemini-cli
-# ==============================================================================
-install_gemini_cli() {
-    log_section "8. 安装 gemini-cli"
-    
-    # 以指定用户身份安装
-    sudo -u "${NEW_USER}" bash << 'GEMINI_EOF'
-set -e
-export HOME="/home/sw"
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-npm install -g @google/gemini-cli
-
-# 自动确认安装扩展（使用 yes 命令自动回答 Y）
-yes | gemini extensions install https://github.com/ChromeDevTools/chrome-devtools-mcp || true
-GEMINI_EOF
-    
-    log_info "gemini-cli 安装完成"
-}
-
-# ==============================================================================
-# 9. 安装 Google Antigravity
-# ==============================================================================
-install_antigravity() {
-    log_section "9. 安装 Google Antigravity"
-    
-    # 添加仓库密钥
-    mkdir -p /etc/apt/keyrings
-    curl -fsSL https://us-central1-apt.pkg.dev/doc/repo-signing-key.gpg | \
-        gpg --dearmor --yes -o /etc/apt/keyrings/antigravity-repo-key.gpg
-    
-    # 添加仓库
-    echo "deb [signed-by=/etc/apt/keyrings/antigravity-repo-key.gpg] https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev/ antigravity-debian main" | \
-        tee /etc/apt/sources.list.d/antigravity.list > /dev/null
-    
-    # 安装
-    apt-get update -qq
-    apt-get install -y antigravity
-    
-    log_info "Google Antigravity 安装完成"
-    antigravity --version || true
-}
-
-# ==============================================================================
-# 10. 安装 Codex CLI
+# 8. 安装 Codex CLI
 # ==============================================================================
 install_codex_cli() {
-    log_section "10. 安装 Codex CLI"
+    log_section "8. 安装 Codex CLI"
     
     # 以指定用户身份安装
     sudo -u "${NEW_USER}" bash << 'CODEX_EOF'
@@ -434,10 +389,10 @@ CODEX_EOF
 }
 
 # ==============================================================================
-# 11. 安装 cloudflared
+# 9. 安装 cloudflared
 # ==============================================================================
 install_cloudflared() {
-    log_section "11. 安装 cloudflared"
+    log_section "9. 安装 cloudflared"
     
     # 添加 Cloudflare GPG 密钥
     mkdir -p --mode=0755 /usr/share/keyrings
@@ -457,10 +412,10 @@ install_cloudflared() {
 }
 
 # ==============================================================================
-# 12. 配置 Git 和生成 SSH 密钥
+# 10. 配置 Git 和生成 SSH 密钥
 # ==============================================================================
 setup_git() {
-    log_section "12. 配置 Git 和生成 SSH 密钥"
+    log_section "10. 配置 Git 和生成 SSH 密钥"
     
     USER_HOME="/home/${NEW_USER}"
     
@@ -492,10 +447,10 @@ GIT_EOF
 }
 
 # ==============================================================================
-# 13. 启用 BBR TCP 拥塞控制
+# 11. 启用 BBR TCP 拥塞控制
 # ==============================================================================
 enable_bbr() {
-    log_section "13. 启用 BBR TCP 拥塞控制"
+    log_section "11. 启用 BBR TCP 拥塞控制"
     
     # 检查内核是否支持 BBR
     if ! modprobe tcp_bbr &>/dev/null; then
@@ -565,8 +520,6 @@ main() {
     install_docker
     install_nodejs
     install_chromium
-    install_gemini_cli
-    install_antigravity
     install_codex_cli
     install_cloudflared
     setup_git
@@ -581,8 +534,6 @@ main() {
     echo "  - Browser: Native Chrome/Chromium (无沙盒，支持自动化)"
     echo "  - Docker: 已安装"
     echo "  - Node.js: via nvm (v24)"
-    echo "  - gemini-cli: 已安装"
-    echo "  - Antigravity: 已安装"
     echo "  - Codex CLI: 已安装"
     echo "  - cloudflared: 已安装"
     echo "  - BBR: 已启用"
